@@ -1,0 +1,10 @@
+.venv
+data
+gb
+libs
+papers
+refimg
+Shapefile*
+requirements.txt
+
+*__pycache__*
