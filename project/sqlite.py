@@ -17,8 +17,7 @@ output: single OpenDRIVE-like .XML file
 
 import sqlite3
 
-# DB_NAME = 'EMG.db'
-DB_NAME = 'tutorial.db'
+DB_NAME = 'EMG.db'
 
 # Class DataBase
 class DataBase(object):
@@ -31,7 +30,43 @@ class DataBase(object):
 	def __repr__(self):
 		return '{} has {} tables'.format(self.db_name, len(self.tables))
 
-	def insert(self, table, tuples):
+	def createEMGTables(self):
+		"""Create all tables specified in EMG Spec"""
+
+		## Road Level
+		# HRoad 	- Road Reference Line
+		
+		# HRoadNode	- Connecting Points of Road Reference Line
+
+		# ComplexJunction	- Juncions
+
+
+		## Lane Level
+		# HLane 		- 车道级道路
+
+		# HLaneNode 	- 车道级道路连接点
+
+		# HLRestriction	- 车道级道路交通限制信息
+
+		# HLRCondition	- 车道级道路交通限制条件
+
+		# HLaneInfo 	- 车道级道路形状点高端属性
+
+		# HLaneNodeInfo - 车道级道路连接点高端属性
+
+		## Traffic Markings
+		# LMarking		- 线状交通标线
+
+		# AMarking		- 面状交通标线
+
+		## Road Facilities
+		# RFacilityP	- 道路设施点
+
+		# RFacilityL 	- 道路设施线
+
+		# RFacilityA 	- 道路设施面
+
+	def insert(self):
 		print('inserting ...')
 
 	def delete(self):
@@ -45,13 +80,7 @@ class DataBase(object):
 
 def main():
 	db = DataBase(DB_NAME)
-	test(db)
 
-# Test
-def test(db):
-	# Create table
-	db.c.execute('''CREATE TABLE stocks
-					(date text, trans text, symbol text, qty real, price real)''')
 
 if __name__ == '__main__':
 	main()

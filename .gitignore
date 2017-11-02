@@ -8,3 +8,4 @@ Shapefile*
 requirements.txt
 
 *__pycache__*
+*.db

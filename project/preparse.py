@@ -9,10 +9,10 @@ version: 1.0.0
 modified: 2017/11/1 16:28:00 GMT+800
 
 developing env: python 3.6.2
-dependencies  :	shapefile
+dependencies  :	shapefile, pyproj
 
 input :	path to EMG sample data folder
-output: RDBS tables with schema and value tuples
+output: RDBMS insertion and hierachical mesh with shpName|-recID|-partID(only one part in each shape for now)
 """
 
 import os
