@@ -11,8 +11,7 @@ modified: 2017/11/1 14:07:00 GMT+800
 developing env: python 3.6.2
 dependencies  :	sqlite3
 
-input :	path to EMG sample data folder (by calling preparse.py)
-output: single OpenDRIVE-like .XML file
+Class DataBase Definition
 """
 
 import sqlite3
@@ -30,6 +29,21 @@ class DataBase(object):
 	def __repr__(self):
 		return '{} has {} tables'.format(self.db_name, len(self.tables))
 
+	def _createTable(self):
+		print('creating table ...')
+
+	def _insert(self):
+		print('inserting ...')
+
+	def _delete(self):
+		print('deleting ...')
+
+	def _search(self):
+		print('searching ...')
+
+	def _update(self):
+		print('updating ...')
+
 	def createEMGTables(self):
 		"""Create all tables specified in EMG Spec"""
 
@@ -39,7 +53,6 @@ class DataBase(object):
 		# HRoadNode	- Connecting Points of Road Reference Line
 
 		# ComplexJunction	- Juncions
-
 
 		## Lane Level
 		# HLane 		- 车道级道路
@@ -65,22 +78,15 @@ class DataBase(object):
 		# RFacilityL 	- 道路设施线
 
 		# RFacilityA 	- 道路设施面
-
-	def insert(self):
-		print('inserting ...')
-
-	def delete(self):
-		print('deleting ...')
-
-	def search(self):
-		print('searching ...')
-
-	def update(self):
-		print('updating ...')
+		pass
 
 def main():
 	db = DataBase(DB_NAME)
-
+	# db._createTable()
+	# db._insert()
+	# db._delete()
+	# db._search()
+	# db._update()
 
 if __name__ == '__main__':
 	main()
