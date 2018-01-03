@@ -1,7 +1,6 @@
 .DS_Store
 .venv
 data
-gb
 libs
 refimg
 Shapefile*
