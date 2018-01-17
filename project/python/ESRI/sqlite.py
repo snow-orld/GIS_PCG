@@ -5,7 +5,7 @@ Synthesize .shp related files in a folder to one single OpenDRIVE formatted .XML
 
 author: Xueman Mou
 date: 2017/10/30
-version: 1.0.0
+version: 1.0.1
 modified: 2017/11/1 14:07:00 GMT+800
 
 developing env: python 3.6.2
