@@ -1,0 +1,25 @@
+Use EMG_drawshape.py generated mesh as the starting point.
+
+----------------------------------------------------------
+
+Use C++ to further road faces generation. The reason is
+simple: Encapsulate algorithms in .dll and Provide API
+by opening the header files.
+
+Prequisite:
+https://www.bilibili.com/video/av10153654/
+
+-----------------------------------------------------------
+
+Blender only supports Python API. Try to find how to package
+industrial/commercial software written in python (enclosed
+commercial ones better).
+
+Reference:
+Blender Source Code (Open Source)
+Sumo Source Code (Open Source)
+N/A (Disclosed)
+
+-----------------------------------------------------------
+
+TreeJS OpenDRIVE Visualization transported to Blender API.

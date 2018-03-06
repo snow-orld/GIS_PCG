@@ -1,9 +1,7 @@
 .DS_Store
 .venv
 data
-gb
 libs
-papers
 refimg
 Shapefile*
 requirements.txt

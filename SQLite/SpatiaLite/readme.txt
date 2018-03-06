@@ -1,0 +1,1 @@
+https://www.gaia-gis.it/spatialite-2.1/SpatiaLite-manual.html

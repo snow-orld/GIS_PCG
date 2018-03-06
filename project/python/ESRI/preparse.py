@@ -6,10 +6,10 @@ Parse original ESRI files to data sets acceptable for sqlite insertion.
 author: Xueman Mou
 date: 2017/11/1
 version: 1.0.0
-modified: 2018/11/01 16:28:00 GMT+800
+modified: 2017/11/1 16:28:00 GMT+800
 
-developing env: python 3.6.3
-dependencies  :	pyshp, pyproj
+developing env: python 3.6.2
+dependencies  :	shapefile, pyproj
 				sqlite (custom)
 
 input :	path to EMG sample data folder
@@ -19,7 +19,6 @@ output: Hierachical Mesh and Records go to SQLlite
 import os
 import sys
 import shapefile
-import sqlite as sql
 
 def parse(filepath):
 	"""
@@ -46,9 +45,6 @@ def parse(filepath):
 	for srindex, sr in enumerate(sf.shapeRecords()):
 		print('#%03d %s' % (srindex, sr.record))
 
-	# Test for sqlite.py's sqlite db interface
-	sql.Database('test.db')
-	
 def main():
 	"""file I/O and parse all shapes in folder"""
 
