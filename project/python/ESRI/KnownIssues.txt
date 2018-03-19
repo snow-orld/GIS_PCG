@@ -1,0 +1,8 @@
+EMG的ESRI数据绘制问题
+-------------------
+
+1.HLaneInfo和HLaneNodeInfo中涉及到航向Heading，这里应该使用说明文档定义的WGS84坐标系，不能用WGS84 ecef。
+2.第一步骤绘制封闭车道（原来使用路边界作为车道边界），如果只考虑HLane等Lane相关图层，需要使用HLaneInfo和HLaneNodeInfo的Width结合Curvature、Heading、Slope、Width信息，现场计算。
+注意：和绘制OpenDRIVE过程不同，通过Curvature、Heading、Slope、Width等信息计算样点；现在是已知非样点的经纬度高程和参数，然后绘制？
+3.首先绘制非路口车道 － HLane->LHRoadID->?路口标志位
+问题：shape和record的关系：record满足什么条件下再画shape，或者先缓存下所有shape数据（depends on shapetype）
