@@ -45,7 +45,7 @@ class LaneNode(object):
 		self.lon = L
 		self.lat = B
 		self.alt = H
-		self.width = width
+		self.width = Width
 
 def readLanes(pathname):
 

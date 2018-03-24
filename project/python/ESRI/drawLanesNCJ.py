@@ -157,13 +157,15 @@ def draw_lane_not_in_junction(dirpath):
 	# all lane IDs that are not in junctions
 	c.execute('''SELECT HLaneID FROM HLane INNER JOIN HRoad
 		ON HLane.LHRoadID = HRoad.HRoadID
-		WHERE HRoad.InnerCJ == 1''')
+		WHERE HRoad.InnerCJ == 1
+		''')
 	
 	count = 0
 	laneIDs = [t[0] for t in c.fetchall()]
 	for laneID in laneIDs:
+		print('\n%d' % laneID)
 		draw_single_lane(dirpath, laneID)
-		print(laneID)
+		
 		# count += 1
 		# if count > 3:
 		# 	break
@@ -214,11 +216,36 @@ def draw_single_lane(dirpath, laneID):
 	conn.close()
 
 	bm = bmesh.new()
-	bm_lane = bmesh.new()
 
 	verts_left = []
 	verts_right = []
+	verts_central = []
 	verts_in_face = []
+
+	# deal with width 0 neibours
+	nodes_zero_width = None
+	if nodes[1].width == 0:
+		nodes[0].width = 0
+		print('Beginning with 0 width\n')
+	if nodes[-2].width == 0:
+		nodes[-1].width = 0
+		print('Ending with 0 width\n')
+	count = 0
+	while nodes[count].width == 0:
+		print('Conunting beginning zeros %d\n' % count)
+		count += 1
+	if count > 1:
+		nodes_zero_width = nodes[:count]
+		nodes = nodes[count:]
+	last_count = 0
+	while nodes[-1-last_count].width == 0:
+		print('Counting endding zeros %d\n' % last_count)
+		last_count += 1
+	if last_count > 1:
+		nodes_zero_width = nodes[-last_count:]
+		nodes = nodes[:-last_count]
+	
+	# end of dealing with 0 width problem
 
 	for index, node in enumerate(nodes):
 		co = (node.lon, node.lat, node.alt)
@@ -232,14 +259,14 @@ def draw_single_lane(dirpath, laneID):
 		
 		forward = None
 		if index < len(nodes) - 1:
-			co_next = Vector((nodes[index + 1].lon, nodes[index + 1].lat, nodes[index + 1].alt))
+			co_next = (nodes[index + 1].lon, nodes[index + 1].lat, nodes[index + 1].alt)
 			co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
 			co_next = [x - x0 for x, x0 in zip(co_next, center)]
 			forward = [x - y for x, y in zip(co_next, co)]
 			forward = Vector(forward)
 			forward.normalize()
 		else:
-			co_prev = Vector((nodes[index - 1].lon, nodes[index - 1].lat, nodes[index - 1].alt))
+			co_prev = (nodes[index - 1].lon, nodes[index - 1].lat, nodes[index - 1].alt)
 			co_prev = pyproj.transform(wgs84, ecef, co_prev[0], co_prev[1], co_prev[2])
 			co_prev = [x - x0 for x, x0 in zip(co_prev, center)]
 			forward = [x - y for x, y in zip(co, co_prev)]
@@ -251,8 +278,8 @@ def draw_single_lane(dirpath, laneID):
 
 		co = Vector(co)
 		vert1 = bm.verts.new(left * width / 2 + co)
-		# vert2 = bm.verts.new(-left * width / 2 + co)
-		vert2 = bm.verts.new(co)
+		vert2 = bm.verts.new(-left * width / 2 + co)
+		# vert2 = bm.verts.new(co)
 		
 		vert1.select = True
 		vert2.select = True
@@ -260,17 +287,32 @@ def draw_single_lane(dirpath, laneID):
 		verts_left.append(vert1)
 		verts_right.append(vert2)
 
+	# drawing central points for nodes with 0 width
+	if nodes_zero_width is not None:
+		for index, node_zero_width in enumerate(nodes_zero_width):
+			co = (node.lon, node.lat, node.alt)
+			co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+			co = [x - x0 for x, x0 in zip(co, center)]
+			vert3 = bm.verts.new(co)
+			verts_central.append(vert3)
+			
 	for vindex, vert in enumerate(verts_left):
-		if index == len(verts_left) - 1 :
+		if vindex == len(verts_left) - 1 :
 			break
 		else:
 			bm.edges.new([vert, verts_left[vindex + 1]])
 
 	for vindex, vert in enumerate(verts_right):
-		if index == len(verts_right) - 1 :
+		if vindex == len(verts_right) - 1 :
 			break
 		else:
 			bm.edges.new([vert, verts_right[vindex + 1]])
+
+	for vindex, vert in enumerate(verts_central):
+		if vindex == len(verts_central) - 1 :
+			break
+		else:
+			bm.edges.new([vert, verts_central[vindex + 1]])
 
 	verts_left.reverse()
 	verts_in_face = verts_left + verts_right
