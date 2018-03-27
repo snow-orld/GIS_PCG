@@ -46,6 +46,9 @@ def parse_file(db, filepath):
 		attribute, datatype, lenA, lenB = field
 		# print('\t%s%s\t%s\t%s\t%s' % (attribute, ' '*(8 - len(attribute)), datatype, lenA, lenB))
 
+	LMIDs = []
+	HLNodeIDs = []
+	LRIDs = []
 	# Tuples
 	for srindex, sr in enumerate(sf.shapeRecords()):
 		# print('#%03d %s' % (srindex, sr.record))
@@ -63,16 +66,21 @@ def parse_file(db, filepath):
 			db.c.execute('''INSERT INTO ComplexJunction VALUES(?,?,?,?,?,?,?,?)''', (CJID, MeshID, Owner, CJType, CJNameC, CJNameP, CJNameE, CJGroupID))
 
 		if filepath.find('HLane.shp') > -1:
-			HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag = sr.record
+			print(sr.record)
+			HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag, tmp = sr.record
 			db.c.execute('''INSERT INTO HLane VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag))
 
 		if filepath.find('HLaneNode.shp') > -1:
 			HLNodeID, MeshID, Owner, LHNodeID, LHLNodeID, L, B, H, HLWidth = sr.record
-			db.c.execute('''INSERT INTO HLaneNode VALUES (?,?,?,?,?,?,?,?,?)''', (HLNodeID, MeshID, Owner, LHNodeID, LHLNodeID, L, B, H, HLWidth))
+			if HLNodeID not in HLNodeIDs:
+				HLNodeIDs.append(HLNodeID)
+				db.c.execute('''INSERT INTO HLaneNode VALUES (?,?,?,?,?,?,?,?,?)''', (HLNodeID, MeshID, Owner, LHNodeID, LHLNodeID, L, B, H, HLWidth))
 
 		if filepath.find('HLRestriction.shp') > -1:
 			LRID, SHLaneID, HLNodeID, EHLaneID, RCID = sr.record
-			db.c.execute('''INSERT INTO HLRestriction VALUES (?,?,?,?,?)''', (LRID, SHLaneID, HLNodeID, EHLaneID, RCID))
+			if LRID not in LRIDs:
+				LRIDs.append(LRID)
+				db.c.execute('''INSERT INTO HLRestriction VALUES (?,?,?,?,?)''', (LRID, SHLaneID, HLNodeID, EHLaneID, RCID))
 
 		if filepath.find('HLRCondition.shp') > -1:
 			RCID, LUserType, FVFlag, RTime = sr.record
@@ -88,14 +96,17 @@ def parse_file(db, filepath):
 
 		if filepath.find('LMarking.shp') > -1:
 			LMID, MeshID, Owner, LMType, LMColor, LMForm, LMWidth, LMLength, LHRoadID, LHLaneID = sr.record
-			db.c.execute('''INSERT INTO LMarking VALUES (?,?,?,?,?,?,?,?,?,?)''', (LMID, MeshID, Owner, LMType, LMColor, LMForm, LMWidth, LMLength, LHRoadID, LHLaneID))
+			if LMID not in LMIDs:
+				LMIDs.append(LMID)
+				db.c.execute('''INSERT INTO LMarking VALUES (?,?,?,?,?,?,?,?,?,?)''', (LMID, MeshID, Owner, LMType, LMColor, LMForm, LMWidth, LMLength, LHRoadID, LHLaneID))
 
 		if filepath.find('AMarking.shp') > -1:
 			AMID, MeshID, Owner, AMType, ArrowType, LHRoadID, LHLaneID = sr.record
 			db.c.execute('''INSERT INTO AMarking VALUES (?,?,?,?,?,?,?)''', (AMID, MeshID, Owner, AMType, ArrowType, LHRoadID, LHLaneID))
 
 		if filepath.find('RFacilityP.shp') > -1:
-			PObjectID, MeshID, Owner, OType, THeight, BHeight, TSShape, ViaSign, TWidth, Diameter, LHRoadID = sr.record
+			print(sr.record)
+			PObjectID, MeshID, Owner, OType, THeight, BHeight, TSShape, ViaSign, TWidth, Diameter, tmp, LHRoadID = sr.record
 			db.c.execute('''INSERT INTO RFacilityP VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (PObjectID, MeshID, Owner, OType, THeight, BHeight, TSShape, ViaSign, TWidth, Diameter, LHRoadID))
 
 		if filepath.find('RFacilityL.shp') > -1:
