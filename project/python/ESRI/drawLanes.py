@@ -1,14 +1,14 @@
 """
-file: drawLanesNCJ.py
+file: drawLanes.py
 
-draw closed lanes with surfaces. All Lanes are not in any junctions.
+draw closed lanes with surfaces. Lanes can be in a junction.
 
 author: Xueman Mou
 date: 2018/3/19
 version: 1.0.1
-modified: 2018/3/23 09:09:00 GMT +800
+modified: 2018/3/27 09:09:00 GMT +800
 
-developing env: python 3.5.3
+developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils
 """
 
@@ -29,7 +29,7 @@ ecef = pyproj.Proj(init='epsg:4978') # geocentric
 center = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/WebGL小组/modeling/GIS_PCG/project/python/ESRI/EMG.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def ls(folder):
 	shapefiles = []
@@ -180,6 +180,158 @@ class laneNode(object):
 		self.alt = H
 		self.width = width
 		
+def draw_lanes(dirpath):
+
+	conn = sqlite3.connect(DB)
+	c = conn.cursor()
+
+	sf = shapefile.Reader(os.path.join(dirpath, 'HLane.shp'))
+	for index, sr in enumerate(sf.shapeRecords()):
+		shape = sr.shape
+		record = sr.record
+
+		if record[-1] == 1 or record[-1]==2:
+
+			# the lane is with in a fixed lane
+			print('lane #%d, is within unspecified area %s' % (record[0], 'no' if record[-1]==1 else 'yes') )
+			nodes = []
+			nodes_zero_width = []
+
+			# first lane node, width in HLaneNode
+			c.execute('''SELECT * FROM HLaneNode WHERE HLNodeID = ?''', (record[4],))
+			result = c.fetchone()
+			first_node = laneNode(shape.points[0][0], shape.points[0][1], shape.z[0], result[8])
+			nodes.append(first_node)
+			
+			# last lane node, width in HLaneNode
+			c.execute('''SELECT * FROM HLaneNode WHERE HLNodeID = ?''', (record[5],))
+			result = c.fetchone()
+			last_node = laneNode(shape.points[-1][0], shape.points[-1][1], shape.z[-1], result[8])
+	
+			# inner shape nodes, width in HLaneInfo
+			laneID = record[0]
+			c.execute('''SELECT * FROM HLaneInfo WHERE HLaneID = ?''', (laneID,))
+			for zindex, (point, row) in enumerate(zip(shape.points[1:-1], c.fetchall())):
+				if record[-1] == 1:
+					width = row[9]
+				elif record[-1] == 2:
+					# linear interpolation for lanes that are not in specified within boundaries
+					width = first_node.width + (last_node.width - first_node.width) * (zindex + 1) / (len(shape.points))
+				node = laneNode(point[0], point[1], shape.z[zindex + 1], width)
+				if laneID in (50100000070, 50100000101, 50100000136, 50100000137):
+					print(row[9])
+				nodes.append(node)
+				
+			nodes.append(last_node)
+
+			# deal with leading/ending width
+			if nodes[1].width == 0:
+				nodes[0].width = 0
+			if nodes[-2].width == 0:
+				nodes[-1].width = 0
+			count = 0
+			while nodes[count].width == 0:
+				count += 1
+				if count == len(nodes):
+					break
+			if count > 1:
+				nodes_zero_width = nodes[:count]
+				nodes = nodes[count:]
+			last_count = 0
+			if len(nodes)>0:
+				while nodes[-1-last_count].width == 0:
+					last_count += 1
+					if last_count == len(nodes):
+						break
+			if last_count > 1:
+				nodes_zero_width = nodes[-last_count:]
+				nodes = nodes[:-last_count]
+
+			verts_left = []
+			verts_central = []
+			verts_right = []
+			verts_in_face = []
+
+			bm = bmesh.new()
+			
+			for index, node in enumerate(nodes):
+				co = (node.lon, node.lat, node.alt)
+				width = node.width
+
+				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+				up = Vector(co)
+				up.normalize()
+
+				co = [x - x0 for x, x0 in zip(co, center)]
+				
+				forward = None
+				if index < len(nodes) - 1:
+					co_next = (nodes[index + 1].lon, nodes[index + 1].lat, nodes[index + 1].alt)
+					co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
+					co_next = [x - x0 for x, x0 in zip(co_next, center)]
+					forward = [x - y for x, y in zip(co_next, co)]
+					forward = Vector(forward)
+					forward.normalize()
+				else:
+					co_prev = (nodes[index - 1].lon, nodes[index - 1].lat, nodes[index - 1].alt)
+					co_prev = pyproj.transform(wgs84, ecef, co_prev[0], co_prev[1], co_prev[2])
+					co_prev = [x - x0 for x, x0 in zip(co_prev, center)]
+					forward = [x - y for x, y in zip(co, co_prev)]
+					forward = Vector(forward)
+					forward.normalize()
+
+				left = up.cross(forward)
+				left.normalize()
+
+				co = Vector(co)
+				vert1 = bm.verts.new(left * width / 2 + co)
+				vert2 = bm.verts.new(-left * width / 2 + co)
+
+				verts_left.append(vert1)
+				verts_right.append(vert2)
+
+			# drawing central points for nodes with 0 width
+			for index, node_zero_width in enumerate(nodes_zero_width):
+				co = (node.lon, node.lat, node.alt)
+				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+				co = [x - x0 for x, x0 in zip(co, center)]
+				vert3 = bm.verts.new(co)
+				verts_central.append(vert3)
+					
+			# for vindex, vert in enumerate(verts_left):
+			# 	if vindex == len(verts_left) - 1 :
+			# 		break
+			# 	else:
+			# 		bm.edges.new([vert, verts_left[vindex + 1]])
+
+			# for vindex, vert in enumerate(verts_right):
+			# 	if vindex == len(verts_right) - 1 :
+			# 		break
+			# 	else:
+			# 		bm.edges.new([vert, verts_right[vindex + 1]])
+
+			for vindex, vert in enumerate(verts_central):
+				if vindex == len(verts_central) - 1 :
+					break
+				else:
+					bm.edges.new([vert, verts_central[vindex + 1]])
+
+			verts_left.reverse()
+			verts_in_face = verts_left + verts_right
+			if len(verts_in_face) > 1:
+				bm.faces.new(verts_in_face)
+			
+			dataname = str(laneID)
+			me = bpy.data.meshes.new(dataname)
+			file_obj = bpy.data.objects.new(dataname, me)
+			bpy.context.scene.objects.link(file_obj)
+
+			bm.to_mesh(me)
+			bm.free()
+
+			# test_helper(dirpath, laneID)
+	conn.close()
+
 def draw_single_lane(dirpath, laneID):
 
 	conn = sqlite3.connect(DB)
@@ -226,20 +378,16 @@ def draw_single_lane(dirpath, laneID):
 	nodes_zero_width = None
 	if nodes[1].width == 0:
 		nodes[0].width = 0
-		print('Beginning with 0 width\n')
 	if nodes[-2].width == 0:
 		nodes[-1].width = 0
-		print('Ending with 0 width\n')
 	count = 0
-	while nodes[count].width == 0:
-		print('Conunting beginning zeros %d\n' % count)
+	while nodes[count].width == 0 and count <= len(nodes) - 1:
 		count += 1
 	if count > 1:
 		nodes_zero_width = nodes[:count]
 		nodes = nodes[count:]
 	last_count = 0
-	while nodes[-1-last_count].width == 0:
-		print('Counting endding zeros %d\n' % last_count)
+	while nodes[-1-last_count].width == 0 and last_count <= len(nodes) - 1:
 		last_count += 1
 	if last_count > 1:
 		nodes_zero_width = nodes[-last_count:]
@@ -326,19 +474,23 @@ def draw_single_lane(dirpath, laneID):
 	bm.to_mesh(me)
 	bm.free()
 
-	# test_helper(laneID)
+	# test_helper(dirpath, laneID)
 
-def test_helper(laneID):
+def test_helper(dirpath, laneID):
 	# draw reference line of single lane
-	sf = shapefile.Reader('/Users/mxmcecilia/Documents/WebGL小组/modeling/GIS_PCG/data/EMG_sample_data/EMG_GZ/HLane.shp')
+	sf = shapefile.Reader(os.path.join(dirpath,'HLane.shp'))
 	for index, sr in enumerate(sf.shapeRecords()):
 		shape = sr.shape
 		record = sr.record
 		
+		if record[0] != laneID:
+			continue
+
 		verts_in_edge_loop = []
+
 		if record[0] == laneID:
 			bm = bmesh.new()
-			print('shape.parts #%d, shape.points #%d, shape.z #%d' % (len(shape.parts), len(shape.points), len(shape.z)))
+			# print('shape.parts #%d, shape.points #%d, shape.z #%d' % (len(shape.parts), len(shape.points), len(shape.z)))
 			for pindex, point in enumerate(shape.points):
 				co = point + (shape.z[pindex],)
 				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
@@ -363,7 +515,7 @@ def test_helper(laneID):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/WebGL小组/modeling/GIS_PCG/data/EMG_sample_data/EMG_GZ'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 
 	shapefiles = ls(pathname)
 	
@@ -381,7 +533,8 @@ def main():
 			print('Drawing %s ...' % filename)	
 			draw_shp(os.path.join(pathname, filename), roadIDs)
 
-	draw_lane_not_in_junction(pathname)
+	# draw_lane_not_in_junction(pathname)
+	draw_lanes(pathname)
 
 if __name__ == '__main__':
 	main()
