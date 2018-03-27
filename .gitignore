@@ -9,3 +9,4 @@ requirements.txt
 *__pycache__*
 *.db
 *.pyc
+*.blend1
