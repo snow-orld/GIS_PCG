@@ -16,4 +16,13 @@ Polygon Ref: https://www.j-raedler.de/projects/polygon/
 
 #import bpy
 #import bmesh
-import Polygon
+import Polygon, Polygon.IO
+
+q = Polygon.Polygon(((0.0,0.0), (10.0, 0.0), (10.0, 5.0), (0.0, 5.0)))
+t = Polygon.Polygon(((1.0, 1.0), (3.0, 1.0), (2.0, 3.0)))
+a = q - t
+#Polygon.IO.writeSVG('test.svg', (a, ))
+
+c = Polygon.Shapes.Circle()
+s = Polygon.Shapes.Star()
+Polygon.IO.writeSVG('test.svg', (a, c, s))

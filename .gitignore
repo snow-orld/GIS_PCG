@@ -11,3 +11,6 @@ requirements.txt
 *.db
 *.pyc
 *.blend1
+*.svg
+*.gp
+*.xml
