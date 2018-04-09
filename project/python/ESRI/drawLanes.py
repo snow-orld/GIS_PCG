@@ -6,7 +6,7 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 author: Xueman Mou
 date: 2018/3/19
 version: 1.0.1
-modified: 2018/3/27 09:09:00 GMT +800
+modified: 2018/3/28 09:15:00 GMT +800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils
@@ -54,7 +54,7 @@ def filterRoadsNotInJunction(folderpath):
 
 	return roadIDs
 
-def draw_shp(shpname, roadIDs):
+def draw_shp(shpname):
 	sf = shapefile.Reader(shpname)
 
 	# print('Type %s' % sf.shapeType)
@@ -80,11 +80,6 @@ def draw_shp(shpname, roadIDs):
 		record = shapeRec.record
 
 		# print('\nShape#%d %d parts, %d points, record: %s' % (srindex, len(shape.parts), len(shape.points), record))
-
-		# only draw roads not in junctions for now
-		if os.path.basename(shpname) == 'HLane.shp':
-			if record[7] not in roadIDs:
-				continue
 
 		if len(shape.parts) == 0:
 
@@ -185,15 +180,19 @@ def draw_lanes(dirpath):
 	conn = sqlite3.connect(DB)
 	c = conn.cursor()
 
+	layer_obj = bpy.data.objects.new('LaneFaces', None)
+	bpy.context.scene.objects.link(layer_obj)
+
 	sf = shapefile.Reader(os.path.join(dirpath, 'HLane.shp'))
 	for index, sr in enumerate(sf.shapeRecords()):
 		shape = sr.shape
 		record = sr.record
 
-		if record[-1] == 1 or record[-1]==2:
+		if record[14] == 1:
 
 			# the lane is with in a fixed lane
-			print('lane #%d, is within unspecified area %s' % (record[0], 'no' if record[-1]==1 else 'yes') )
+			print('lane #%d, is within unspecified area %s' % (record[0], 'no' if record[14]==1 else 'yes') )
+			# print('VLaneFlag %d, ETCFlag %d, SDFlag %d, EGFlag %d, RampFlag %d, MELType %d, NLaneSFlag %d' % (record[8], record[9], record[10], record[11], record[12], record[13], record[14]))
 			nodes = []
 			nodes_zero_width = []
 
@@ -207,21 +206,20 @@ def draw_lanes(dirpath):
 			c.execute('''SELECT * FROM HLaneNode WHERE HLNodeID = ?''', (record[5],))
 			result = c.fetchone()
 			last_node = laneNode(shape.points[-1][0], shape.points[-1][1], shape.z[-1], result[8])
-	
+
 			# inner shape nodes, width in HLaneInfo
 			laneID = record[0]
 			c.execute('''SELECT * FROM HLaneInfo WHERE HLaneID = ?''', (laneID,))
-			for zindex, (point, row) in enumerate(zip(shape.points[1:-1], c.fetchall())):
-				if record[-1] == 1:
+			result = c.fetchall()
+			for zindex, (point, row) in enumerate(zip(shape.points[1:-1], result)):
+				if record[14] == 1:
 					width = row[9]
-				elif record[-1] == 2:
+				elif record[14] == 2:
 					# linear interpolation for lanes that are not in specified within boundaries
 					width = first_node.width + (last_node.width - first_node.width) * (zindex + 1) / (len(shape.points))
 				node = laneNode(point[0], point[1], shape.z[zindex + 1], width)
-				if laneID in (50100000070, 50100000101, 50100000136, 50100000137):
-					print(row[9])
 				nodes.append(node)
-				
+
 			nodes.append(last_node)
 
 			# deal with leading/ending width
@@ -235,16 +233,16 @@ def draw_lanes(dirpath):
 				if count == len(nodes):
 					break
 			if count > 1:
-				nodes_zero_width = nodes[:count]
+				nodes_zero_width += nodes[:count]
 				nodes = nodes[count:]
 			last_count = 0
-			if len(nodes)>0:
+			if len(nodes) > 0:
 				while nodes[-1-last_count].width == 0:
 					last_count += 1
 					if last_count == len(nodes):
 						break
-			if last_count > 1:
-				nodes_zero_width = nodes[-last_count:]
+			if last_count > 0:
+				nodes_zero_width += nodes[-last_count:]
 				nodes = nodes[:-last_count]
 
 			verts_left = []
@@ -286,6 +284,7 @@ def draw_lanes(dirpath):
 				co = Vector(co)
 				vert1 = bm.verts.new(left * width / 2 + co)
 				vert2 = bm.verts.new(-left * width / 2 + co)
+				# vert2 = bm.verts.new(co)
 
 				verts_left.append(vert1)
 				verts_right.append(vert2)
@@ -323,13 +322,15 @@ def draw_lanes(dirpath):
 			
 			dataname = str(laneID)
 			me = bpy.data.meshes.new(dataname)
-			file_obj = bpy.data.objects.new(dataname, me)
-			bpy.context.scene.objects.link(file_obj)
+			obj = bpy.data.objects.new(dataname, me)
+			bpy.context.scene.objects.link(obj)
+			obj.parent = layer_obj
 
 			bm.to_mesh(me)
 			bm.free()
 
-			# test_helper(dirpath, laneID)
+	# examine_HLaneInfo(dirpath)
+	test_helper(dirpath)
 	conn.close()
 
 def draw_single_lane(dirpath, laneID):
@@ -476,42 +477,47 @@ def draw_single_lane(dirpath, laneID):
 
 	# test_helper(dirpath, laneID)
 
-def test_helper(dirpath, laneID):
+def test_helper(dirpath):
 	# draw reference line of single lane
 	sf = shapefile.Reader(os.path.join(dirpath,'HLane.shp'))
 	for index, sr in enumerate(sf.shapeRecords()):
 		shape = sr.shape
 		record = sr.record
-		
-		if record[0] != laneID:
-			continue
-
+	
 		verts_in_edge_loop = []
+		
+		bm = bmesh.new()
+		# print('shape.parts #%d, shape.points #%d, shape.z #%d' % (len(shape.parts), len(shape.points), len(shape.z)))
+		for pindex, point in enumerate(shape.points):
+			co = point + (shape.z[pindex],)
+			co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+			co = [x - x0 for x, x0 in zip(co, center)]
+			
+			vert = bm.verts.new(co)
+			verts_in_edge_loop.append(vert)
 
-		if record[0] == laneID:
-			bm = bmesh.new()
-			# print('shape.parts #%d, shape.points #%d, shape.z #%d' % (len(shape.parts), len(shape.points), len(shape.z)))
-			for pindex, point in enumerate(shape.points):
-				co = point + (shape.z[pindex],)
-				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
-				co = [x - x0 for x, x0 in zip(co, center)]
-				
-				vert = bm.verts.new(co)
-				verts_in_edge_loop.append(vert)
+		if verts_in_edge_loop:
+			for vindex, vert in enumerate(verts_in_edge_loop):
+				if vindex == len(verts_in_edge_loop) - 1:
+					break
+				bm.edges.new([vert, verts_in_edge_loop[vindex + 1]])
 
-			if verts_in_edge_loop:
-				for vindex, vert in enumerate(verts_in_edge_loop):
-					if vindex == len(verts_in_edge_loop) - 1:
-						break
-					bm.edges.new([vert, verts_in_edge_loop[vindex + 1]])
+		dataname = 'laneC_' + str(record[0])
+		me = bpy.data.meshes.new(dataname)
+		obj = bpy.data.objects.new(dataname, me)
+		bpy.context.scene.objects.link(obj)
 
-			dataname = 'laneC_' + str(laneID)
-			me = bpy.data.meshes.new(dataname)
-			file_obj = bpy.data.objects.new(dataname, me)
-			bpy.context.scene.objects.link(file_obj)
+		bm.to_mesh(me)
+		bm.free()
 
-			bm.to_mesh(me)
-			bm.free()
+def examine_HLaneInfo(dirpath):
+
+	sf = shapefile.Reader(os.path.join(dirpath, 'HLaneInfo.shp'))
+	count = 0
+	for index, record in enumerate(sf.records()):
+		if record[1] == 17300000009.0 or record[1] == 17300000009:
+			count += 1
+	print('lane #%d has #%d records' % (17300000009, count))
 
 def main():
 
@@ -531,7 +537,7 @@ def main():
 
 		for index, filename in enumerate(shapefiles):
 			print('Drawing %s ...' % filename)	
-			draw_shp(os.path.join(pathname, filename), roadIDs)
+			draw_shp(os.path.join(pathname, filename))
 
 	# draw_lane_not_in_junction(pathname)
 	draw_lanes(pathname)
