@@ -66,8 +66,7 @@ def parse_file(db, filepath):
 			db.c.execute('''INSERT INTO ComplexJunction VALUES(?,?,?,?,?,?,?,?)''', (CJID, MeshID, Owner, CJType, CJNameC, CJNameP, CJNameE, CJGroupID))
 
 		if filepath.find('HLane.shp') > -1:
-			print(sr.record)
-			HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag, tmp = sr.record
+			HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag = sr.record
 			db.c.execute('''INSERT INTO HLane VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(HLaneID, SeqNum, MeshID, Owner, SHLNodeID, EHLNodeID, LSpeed, LHRoadID, VLaneFlag, ETCFlag, SDFlag, EGFlag, RampFlag, MELType, NLaneSFlag))
 
 		if filepath.find('HLaneNode.shp') > -1:
@@ -101,11 +100,10 @@ def parse_file(db, filepath):
 				db.c.execute('''INSERT INTO LMarking VALUES (?,?,?,?,?,?,?,?,?,?)''', (LMID, MeshID, Owner, LMType, LMColor, LMForm, LMWidth, LMLength, LHRoadID, LHLaneID))
 
 		if filepath.find('AMarking.shp') > -1:
-			AMID, MeshID, Owner, AMType, ArrowType, LHRoadID, LHLaneID = sr.record
+			AMID, MeshID, Owner, AMType, ArrowType, LHRoadID, LHLaneID, tmp = sr.record
 			db.c.execute('''INSERT INTO AMarking VALUES (?,?,?,?,?,?,?)''', (AMID, MeshID, Owner, AMType, ArrowType, LHRoadID, LHLaneID))
 
 		if filepath.find('RFacilityP.shp') > -1:
-			print(sr.record)
 			PObjectID, MeshID, Owner, OType, THeight, BHeight, TSShape, ViaSign, TWidth, Diameter, tmp, LHRoadID = sr.record
 			db.c.execute('''INSERT INTO RFacilityP VALUES (?,?,?,?,?,?,?,?,?,?,?)''', (PObjectID, MeshID, Owner, OType, THeight, BHeight, TSShape, ViaSign, TWidth, Diameter, LHRoadID))
 

@@ -29,7 +29,7 @@ ecef = pyproj.Proj(init='epsg:4978') # geocentric
 center = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
 
 def ls(folder):
 	shapefiles = []
@@ -188,10 +188,10 @@ def draw_lanes(dirpath):
 		shape = sr.shape
 		record = sr.record
 
-		if record[14] == 1:
+		if record[14] == 1 or record[14] == 2:
 
 			# the lane is with in a fixed lane
-			print('lane #%d, is within unspecified area %s' % (record[0], 'no' if record[14]==1 else 'yes') )
+			# print('lane #%d, is within unspecified area %s' % (record[0], 'no' if record[14]==1 else 'yes') )
 			# print('VLaneFlag %d, ETCFlag %d, SDFlag %d, EGFlag %d, RampFlag %d, MELType %d, NLaneSFlag %d' % (record[8], record[9], record[10], record[11], record[12], record[13], record[14]))
 			nodes = []
 			nodes_zero_width = []
@@ -206,7 +206,7 @@ def draw_lanes(dirpath):
 			c.execute('''SELECT * FROM HLaneNode WHERE HLNodeID = ?''', (record[5],))
 			result = c.fetchone()
 			last_node = laneNode(shape.points[-1][0], shape.points[-1][1], shape.z[-1], result[8])
-
+			
 			# inner shape nodes, width in HLaneInfo
 			laneID = record[0]
 			c.execute('''SELECT * FROM HLaneInfo WHERE HLaneID = ?''', (laneID,))
@@ -330,7 +330,7 @@ def draw_lanes(dirpath):
 			bm.free()
 
 	# examine_HLaneInfo(dirpath)
-	test_helper(dirpath)
+	# test_helper(dirpath)
 	conn.close()
 
 def draw_single_lane(dirpath, laneID):
@@ -521,7 +521,7 @@ def examine_HLaneInfo(dirpath):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX'
 
 	shapefiles = ls(pathname)
 	

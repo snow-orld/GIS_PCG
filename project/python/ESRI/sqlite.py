@@ -295,8 +295,8 @@ class DataBase(object):
 
 	def queryLane(self):
 		queryLaneNode = '''SELECT * FROM HLaneNode''';
-		for row in self.c.execute(queryLaneNode):
-			print(row)
+		# for row in self.c.execute(queryLaneNode):
+		# 	print(row)
 
 def main():
 	db = DataBase(DB_NAME)
