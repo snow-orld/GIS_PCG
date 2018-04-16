@@ -9,7 +9,7 @@ version: 1.0.2
 modified: 2018/4/13 10:46:00 GMT +0800
 
 developing env: python 3.5.2
-dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils
+dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
 """
 
 import bpy
@@ -19,7 +19,8 @@ import sys
 import shapefile
 import pyproj
 import sqlite3
-from mathutils import Vector
+from mathutils import Vector, Quaternion
+import math
 
 # proj parameters
 wgs84 = pyproj.Proj(init='epsg:4326') # longlat
@@ -27,10 +28,11 @@ ecef = pyproj.Proj(init='epsg:4978') # geocentric
 
 # center of drawing as first shapefile's center
 center = None
-quat = None
+q = None
+q_prime = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
 
 def ls(folder):
 	shapefiles = []
@@ -58,7 +60,14 @@ def filterRoadsNotInJunction(folderpath):
 
 	return roadIDs
 
+def hanmilton_product(v1, v2):
+	return (v1[0] * v2[0] - v1[1] * v2[1] - v1[2] * v2 [2] - v1[3]*v2[3],
+			v1[0] * v2[1] + v1[1] * v2[0] + v1[2] * v2[3] - v1[3]*v2[2],
+			v1[0] * v2[2] - v1[1] * v2[3] + v1[2] * v2[0] + v1[3]*v2[1],
+			v1[0] * v2[3] + v1[1] * v2[2] - v1[2] * v2[1] + v1[3]*v2[0])
+
 def draw_shp(shpname):
+
 	sf = shapefile.Reader(shpname)
 
 	# print('Type %s' % sf.shapeType)
@@ -70,13 +79,29 @@ def draw_shp(shpname):
 
 	# recenter bbox 
 	global center
-	global quat
+	global q
+	global q_prime
 	if center == None:
 		lon_0 = sum(sf.bbox[0::2]) * 0.5
 		lat_0 = sum(sf.bbox[1::2]) * 0.5
 		center = pyproj.transform(wgs84, ecef, lon_0, lat_0, 0)
 		print('\ncenter longlatalt(%f, %f, %f)' % (lon_0, lat_0, 0))
 		print('ecef {}'.format(center))
+
+		# calculate quaternion
+		# https://www.gamedev.net/forums/topic/429507-finding-the-quaternion-betwee-two-vectors/
+		# https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+		crossproduct = (center[1], -center[0], 0)
+		q = Quaternion([0, center[1], -center[0], 0])
+		q.w = math.sqrt((center[0]*center[0]+center[1]*center[1]+center[2]*center[2])*(1*1)) + center[2]
+		length = math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3])
+		q = (q[0]/length, q[1]/length, q[2]/length, q[3]/length)
+		# q.normalize() -- 4 digits after .
+		q_prime = (q[0], -q[1], -q[2], -q[3])
+		#new_center = q*center*q_prime
+		new_center = hanmilton_product(hanmilton_product(q, (0,)+center), q_prime)[1:]
+		center = new_center
+		print(new_center)
 
 	bm = bmesh.new()
 
@@ -96,6 +121,7 @@ def draw_shp(shpname):
 				# point is of type shapefile._Array
 				co = (point[0], point[1], shape.z[pindex])
 				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+				co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
 				co = [x - x0 for x, x0 in zip(co, center)]
 				if shape.shapeType == 11:
 					vert = bm.verts.new(co)
@@ -119,6 +145,8 @@ def draw_shp(shpname):
 					co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
 					co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
 					# print('ecef {}'.format(co))
+					co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
+					co_next = hanmilton_product(hanmilton_product(q, (0,) + co_next), q_prime)[1:]
 
 					co = [x - x0 for x, x0 in zip(co, center)]
 					co_next = [x - x0 for x, x0 in zip(co_next, center)]
@@ -140,7 +168,7 @@ def draw_shp(shpname):
 				if verts_in_face:
 					face = bm.faces.new(verts_in_face)
 					bmesh.ops.reverse_faces(bm, faces=[face])
-					bmesh.ops.triangulate(bm, faces=bm.faces)
+					# bmesh.ops.triangulate(bm, faces=bm.faces)
 
 	dataname = os.path.splitext(os.path.basename(shpname))[0]
 	me = bpy.data.meshes.new(dataname)
@@ -291,6 +319,7 @@ def draw_single_lane(nodes, laneID, parent=None):
 		width = node.width
 
 		co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
+		co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
 		up = Vector(co)
 		up.normalize()
 
@@ -300,6 +329,8 @@ def draw_single_lane(nodes, laneID, parent=None):
 		if index < len(my_nodes) - 1:
 			co_next = (my_nodes[index + 1].lon, my_nodes[index + 1].lat, my_nodes[index + 1].alt)
 			co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
+			co_next = hanmilton_product(hanmilton_product(q, (0,) + co_next), q_prime)[1:]
+			
 			co_next = [x - x0 for x, x0 in zip(co_next, center)]
 			forward = [x - y for x, y in zip(co_next, co)]
 			forward = Vector(forward)
@@ -307,6 +338,8 @@ def draw_single_lane(nodes, laneID, parent=None):
 		else:
 			co_prev = (my_nodes[index - 1].lon, my_nodes[index - 1].lat, my_nodes[index - 1].alt)
 			co_prev = pyproj.transform(wgs84, ecef, co_prev[0], co_prev[1], co_prev[2])
+			co_prev = hanmilton_product(hanmilton_product(q, (0,) + co_prev), q_prime)[1:]
+			
 			co_prev = [x - x0 for x, x0 in zip(co_prev, center)]
 			forward = [x - y for x, y in zip(co, co_prev)]
 			forward = Vector(forward)
@@ -401,7 +434,7 @@ def test_helper(dirpath):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX'
 
 	shapefiles = ls(pathname)
 	
