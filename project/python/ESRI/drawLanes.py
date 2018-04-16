@@ -6,7 +6,7 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 author: Xueman Mou
 date: 2018/3/19
 version: 1.0.2
-modified: 2018/4/13 10:46:00 GMT +0800
+modified: 2018/4/16 16:24:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
@@ -32,7 +32,7 @@ q = None
 q_prime = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def ls(folder):
 	shapefiles = []
@@ -42,9 +42,6 @@ def ls(folder):
 				shapefiles.append(filename)
 
 	return shapefiles
-
-def transform(co, quaternion, target):
-	pass
 	
 def filterRoadsNotInJunction(folderpath):
 	"""find roads' IDs that are not in any junctions"""
@@ -66,6 +63,29 @@ def hanmilton_product(v1, v2):
 			v1[0] * v2[2] - v1[1] * v2[3] + v1[2] * v2[0] + v1[3]*v2[1],
 			v1[0] * v2[3] + v1[1] * v2[2] - v1[2] * v2[1] + v1[3]*v2[0])
 
+def get_quaternion():
+	global center
+	global q
+	global q_prime
+	# calculate quaternion
+	# https://www.gamedev.net/forums/topic/429507-finding-the-quaternion-betwee-two-vectors/
+	# https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
+	crossproduct = (center[1], -center[0], 0)
+	q = Quaternion([0, center[1], -center[0], 0])
+	q.w = math.sqrt((center[0]*center[0]+center[1]*center[1]+center[2]*center[2])*(1*1)) + center[2]
+	length = math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3])
+	q = (q[0]/length, q[1]/length, q[2]/length, q[3]/length)
+	# q.normalize() -- 4 digits after .
+	q_prime = (q[0], -q[1], -q[2], -q[3])
+	#new_center = q*center*q_prime
+	new_center = hanmilton_product(hanmilton_product(q, (0,)+center), q_prime)[1:]
+	center = new_center
+	print(new_center)
+
+def lonlat_to_local_up(lon, lat, alt, center_lon_lat_alt):
+	# lon lat first convert to ecef, then rotate ecef's axis towards up to sky
+	pass
+
 def draw_shp(shpname):
 
 	sf = shapefile.Reader(shpname)
@@ -79,8 +99,6 @@ def draw_shp(shpname):
 
 	# recenter bbox 
 	global center
-	global q
-	global q_prime
 	if center == None:
 		lon_0 = sum(sf.bbox[0::2]) * 0.5
 		lat_0 = sum(sf.bbox[1::2]) * 0.5
@@ -88,20 +106,8 @@ def draw_shp(shpname):
 		print('\ncenter longlatalt(%f, %f, %f)' % (lon_0, lat_0, 0))
 		print('ecef {}'.format(center))
 
-		# calculate quaternion
-		# https://www.gamedev.net/forums/topic/429507-finding-the-quaternion-betwee-two-vectors/
-		# https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
-		crossproduct = (center[1], -center[0], 0)
-		q = Quaternion([0, center[1], -center[0], 0])
-		q.w = math.sqrt((center[0]*center[0]+center[1]*center[1]+center[2]*center[2])*(1*1)) + center[2]
-		length = math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3])
-		q = (q[0]/length, q[1]/length, q[2]/length, q[3]/length)
-		# q.normalize() -- 4 digits after .
-		q_prime = (q[0], -q[1], -q[2], -q[3])
-		#new_center = q*center*q_prime
-		new_center = hanmilton_product(hanmilton_product(q, (0,)+center), q_prime)[1:]
-		center = new_center
-		print(new_center)
+		# rotate ecef's axis align to up-to-sky
+		get_quaternion()
 
 	bm = bmesh.new()
 
@@ -434,7 +440,7 @@ def test_helper(dirpath):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 
 	shapefiles = ls(pathname)
 	
