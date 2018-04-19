@@ -5,8 +5,8 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 
 author: Xueman Mou
 date: 2018/3/19
-version: 1.0.2
-modified: 2018/4/16 16:24:00 GMT +0800
+version: 1.0.3
+modified: 2018/4/19 16:24:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
@@ -80,11 +80,14 @@ def get_quaternion():
 	#new_center = q*center*q_prime
 	new_center = hanmilton_product(hanmilton_product(q, (0,)+center), q_prime)[1:]
 	center = new_center
-	print(new_center)
+	# print(new_center)
 
-def lonlat_to_local_up(lon, lat, alt, center_lon_lat_alt):
+def lonlat_to_local_up(lon_lat_alt, center):
 	# lon lat first convert to ecef, then rotate ecef's axis towards up to sky
-	pass
+	co = pyproj.transform(wgs84, ecef, lon_lat_alt[0], lon_lat_alt[1], lon_lat_alt[2])
+	co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
+	co = [x - x0 for x, x0 in zip(co, center)]
+	return co
 
 def draw_shp(shpname):
 
@@ -106,9 +109,6 @@ def draw_shp(shpname):
 		print('\ncenter longlatalt(%f, %f, %f)' % (lon_0, lat_0, 0))
 		print('ecef {}'.format(center))
 
-		# rotate ecef's axis align to up-to-sky
-		get_quaternion()
-
 	bm = bmesh.new()
 
 	for srindex, shapeRec in enumerate(sf.shapeRecords()):
@@ -127,7 +127,6 @@ def draw_shp(shpname):
 				# point is of type shapefile._Array
 				co = (point[0], point[1], shape.z[pindex])
 				co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
-				co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
 				co = [x - x0 for x, x0 in zip(co, center)]
 				if shape.shapeType == 11:
 					vert = bm.verts.new(co)
@@ -151,8 +150,6 @@ def draw_shp(shpname):
 					co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
 					co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
 					# print('ecef {}'.format(co))
-					co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
-					co_next = hanmilton_product(hanmilton_product(q, (0,) + co_next), q_prime)[1:]
 
 					co = [x - x0 for x, x0 in zip(co, center)]
 					co_next = [x - x0 for x, x0 in zip(co_next, center)]
@@ -325,7 +322,7 @@ def draw_single_lane(nodes, laneID, parent=None):
 		width = node.width
 
 		co = pyproj.transform(wgs84, ecef, co[0], co[1], co[2])
-		co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
+		# co = hanmilton_product(hanmilton_product(q, (0,) + co), q_prime)[1:]
 		up = Vector(co)
 		up.normalize()
 
@@ -335,7 +332,7 @@ def draw_single_lane(nodes, laneID, parent=None):
 		if index < len(my_nodes) - 1:
 			co_next = (my_nodes[index + 1].lon, my_nodes[index + 1].lat, my_nodes[index + 1].alt)
 			co_next = pyproj.transform(wgs84, ecef, co_next[0], co_next[1], co_next[2])
-			co_next = hanmilton_product(hanmilton_product(q, (0,) + co_next), q_prime)[1:]
+			# co_next = hanmilton_product(hanmilton_product(q, (0,) + co_next), q_prime)[1:]
 			
 			co_next = [x - x0 for x, x0 in zip(co_next, center)]
 			forward = [x - y for x, y in zip(co_next, co)]
@@ -344,7 +341,7 @@ def draw_single_lane(nodes, laneID, parent=None):
 		else:
 			co_prev = (my_nodes[index - 1].lon, my_nodes[index - 1].lat, my_nodes[index - 1].alt)
 			co_prev = pyproj.transform(wgs84, ecef, co_prev[0], co_prev[1], co_prev[2])
-			co_prev = hanmilton_product(hanmilton_product(q, (0,) + co_prev), q_prime)[1:]
+			# co_prev = hanmilton_product(hanmilton_product(q, (0,) + co_prev), q_prime)[1:]
 			
 			co_prev = [x - x0 for x, x0 in zip(co_prev, center)]
 			forward = [x - y for x, y in zip(co, co_prev)]
