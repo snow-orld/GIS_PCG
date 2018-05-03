@@ -5,8 +5,8 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 
 author: Xueman Mou
 date: 2018/3/19
-version: 1.0.3
-modified: 2018/4/19 16:24:00 GMT +0800
+version: 1.0.4
+modified: 2018/5/3 08:50:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
@@ -217,16 +217,21 @@ def draw_lanes(dirpath):
 	conn = sqlite3.connect(DB)
 	c = conn.cursor()
 
-	layer_obj = bpy.data.objects.new('LaneFaces', None)
-	bpy.context.scene.objects.link(layer_obj)
-
 	sf = shapefile.Reader(os.path.join(dirpath, 'HLane.shp'))
 	for index, sr in enumerate(sf.shapeRecords()):
 		shape = sr.shape
 		record = sr.record
 
+		road_obj_name = 'Road_' + record[7]
+		road_obj = None
+		if bpy.data.objects.find(road_obj_name) == -1:
+			road_obj = bpy.data.objects.new(road_obj_name, None)
+			bpy.context.scene.objects.link(road_obj)
+		else:
+			road_obj = bpy.data.objects[road_obj_name]
+
 		nodes = []
-	
+
 		if record[14] == 1:
 
 			# the lane is with in a fixed lane
@@ -254,6 +259,7 @@ def draw_lanes(dirpath):
 			nodes.append(last_node)
 			
 		elif record[14] == 2:
+
 			# if lane is in unspecified area, HLaneInfo 's width is all 0.0
 			# width is determined at each node by cases
 			c.execute('''SELECT * FROM HLaneNode WHERE HLNodeID = ?''', (record[4],))
@@ -268,20 +274,31 @@ def draw_lanes(dirpath):
 			
 			c.execute('''SELECT * FROM HLaneInfo WHERE HLaneID = ?''', (record[0],))
 			result = c.fetchall()
-			for zindex, (point, row) in enumerate(zip(shape.points[1:-1], result)):
-				width = first_node.width + (last_node.width - first_node.width) * (zindex + 1)/len(shape.points)
-				node = laneNode(point[0], point[1], shape.z[zindex + 1], width)
-				nodes.append(node)
+
+			# to deal with shoulder-like lanes merge out and merge in
+			
+			if first_node.width != 0 and last_node.width != 0:
+				is_zero_width_inbetween = True
+				for row in result:
+					if row[9] != 0:
+						is_zero_width_inbetween = False
+						break
+				if is_zero_width_inbetween:
+					for zindex, (point, row) in enumerate(zip(shape.points[1:-1], result)):
+						width = first_node.width + (last_node.width - first_node.width) * (zindex + 1)/len(shape.points)
+						node = laneNode(point[0], point[1], shape.z[zindex + 1], width)
+						nodes.append(node)
 
 			nodes.append(last_node)
 			
 		# draw lane by lane
-		draw_single_lane(nodes, record[0], layer_obj)
+		draw_single_lane(nodes, record[0], road_obj)
 
+	# test_helper(dirpath)
 	conn.close()
 
 def draw_single_lane(nodes, laneID, parent=None):
-
+	"""return the center of the lane face, and the radius bound"""
 	bm = bmesh.new()
 
 	my_nodes = nodes
@@ -388,7 +405,7 @@ def draw_single_lane(nodes, laneID, parent=None):
 	verts_left.reverse()
 	verts_in_face = verts_left + verts_right
 	if len(verts_in_face) > 1:
-		bm.faces.new(verts_in_face)
+		face = bm.faces.new(verts_in_face)
 
 	dataname = str(laneID)
 	me = bpy.data.meshes.new(dataname)
@@ -399,8 +416,6 @@ def draw_single_lane(nodes, laneID, parent=None):
 
 	bm.to_mesh(me)
 	bm.free()
-
-	# test_helper(dirpath, laneID)
 
 def test_helper(dirpath):
 	# draw reference line of single lane
@@ -435,6 +450,97 @@ def test_helper(dirpath):
 		bm.to_mesh(me)
 		bm.free()
 
+def calculate_all_center(dirpath):
+	conn = sqlite3.connect(DB)
+	c = conn.cursor()
+	c.execute('select HRoadID from HRoad')
+
+	file_path = os.path.join(dirpath, 'ecef_roads.txt')
+	with open(file_path, 'w') as f:
+		f.write('center_x, center_y, center_z, radius\n')
+		for row in c.fetchall():
+			roadID = str(row[0])
+			center, radius = calculate_road_ecef_center(roadID)
+			f.write('{},{},{},{},{}\n'.format(roadID, center[0], center[1], center[2], radius))
+			export_road_gltf(roadID, export_path='/Users/mxmcecilia/Documents/GIS_PCG/project/server/data')
+
+def calculate_road_ecef_center(roadID):
+	# http://www.kurzemnieks.com/goodies_files/hierarchy_helper.py
+	road_obj_name = 'Road_' + roadID
+	road_obj = bpy.data.objects[road_obj_name]
+
+	sum_x = 0
+	sum_y = 0
+	sum_z = 0
+	cnt = 0
+	radius = 0
+
+	# ASSUME all lanes are of equal length in one road - NOT OK. May vary on lane width
+	for child in road_obj.children:
+		verts = [vert.co for vert in child.data.vertices]
+		plain_verts = [vert.to_tuple() for vert in verts]
+		for vert in plain_verts:
+			sum_x += vert[0]
+			sum_y += vert[1]
+			sum_z += vert[2]
+			cnt += 1
+
+	avg_x = sum_x/cnt
+	avg_y = sum_y/cnt
+	avg_z = sum_z/cnt
+
+	# calculate bounding sphere radius
+	for child in road_obj.children:
+		verts = [vert.co for vert in child.data.vertices]
+		plain_verts = [vert.to_tuple() for vert in verts]
+		for vert in plain_verts:
+			d = distance(vert, (avg_x, avg_y, avg_z))
+			if d > radius:
+				radius = d
+
+	# translate coordinate system, ecef as local origin
+	translate_coordinate_ecef_as_origin(avg_x, avg_y, avg_z, roadID)
+
+	return (avg_x, avg_y, avg_z), radius
+
+def distance(vert1, vert2):
+	square = (vert1[0] - vert2[0])**2 + (vert1[1] - vert2[1])**2 + (vert1[2] - vert2[2])**2
+	return math.sqrt(square)
+
+def deselect_all():
+	for selected in bpy.context.selected_objects:
+		selected.select = False
+
+def translate_coordinate_ecef_as_origin(avg_x, avg_y, avg_z, roadID):
+	"""
+	IMPORTANT: originaly the origin is at (0,0,0), but with ecef, parent origin should be at ecef, with ecef's offset deducted from mesh's vertices
+	"""
+	road_name = 'Road_' + roadID
+	parent = bpy.data.objects[road_name]
+
+	for child in parent.children:
+		bm = bmesh.new()
+		bm.from_mesh(child.data)
+
+		for vert in bm.verts:
+			vert.co[0] -= avg_x
+			vert.co[1] -= avg_y
+			vert.co[2] -= avg_z
+
+		bm.to_mesh(child.data)
+		bm.free()
+
+	parent.location = (avg_x, avg_y, avg_z)
+
+def export_road_gltf(roadID, export_path):
+	deselect_all()
+	road_name = 'Road_' + roadID
+	road_obj = bpy.data.objects[road_name]
+
+	for child in road_obj.children:
+		child.select = True
+		print(child.select)
+
 def main():
 
 	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
@@ -457,6 +563,9 @@ def main():
 
 	# draw_lane_not_in_junction(pathname)
 	draw_lanes(pathname)
+
+	# calculate_road_ecef_center('5010000001')
+	calculate_all_center('/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI')
 
 if __name__ == '__main__':
 	main()

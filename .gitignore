@@ -16,3 +16,4 @@ requirements.txt
 *.xml
 *.gltf
 *.bin
+*.txt
