@@ -462,7 +462,7 @@ def calculate_all_center(dirpath):
 			roadID = str(row[0])
 			center, radius = calculate_road_ecef_center(roadID)
 			f.write('{},{},{},{},{}\n'.format(roadID, center[0], center[1], center[2], radius))
-			export_road_gltf(roadID, export_path='/Users/mxmcecilia/Documents/GIS_PCG/project/server/data')
+			export_road_gltf(roadID, export_path=dirpath)
 
 def calculate_road_ecef_center(roadID):
 	# http://www.kurzemnieks.com/goodies_files/hierarchy_helper.py
@@ -537,9 +537,9 @@ def export_road_gltf(roadID, export_path):
 	road_name = 'Road_' + roadID
 	road_obj = bpy.data.objects[road_name]
 
+	road_obj.select = True
 	for child in road_obj.children:
 		child.select = True
-		print(child.select)
 
 def main():
 
@@ -565,7 +565,7 @@ def main():
 	draw_lanes(pathname)
 
 	# calculate_road_ecef_center('5010000001')
-	calculate_all_center('/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI')
+	calculate_all_center('/Users/mxmcecilia/Documents/GIS_PCG/project/server/data')
 
 if __name__ == '__main__':
 	main()
