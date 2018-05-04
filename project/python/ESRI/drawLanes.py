@@ -6,7 +6,7 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 author: Xueman Mou
 date: 2018/3/19
 version: 1.0.4
-modified: 2018/5/3 08:50:00 GMT +0800
+modified: 2018/5/4 09:05:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
@@ -462,6 +462,9 @@ def calculate_all_center(dirpath):
 			roadID = str(row[0])
 			center, radius = calculate_road_ecef_center(roadID)
 			f.write('{},{},{},{},{}\n'.format(roadID, center[0], center[1], center[2], radius))
+			
+			join_lanes_to_road(roadID)
+			replace_parent_with_child(roadID)
 			export_road_gltf(roadID, export_path=dirpath)
 
 def calculate_road_ecef_center(roadID):
@@ -510,6 +513,7 @@ def distance(vert1, vert2):
 def deselect_all():
 	for selected in bpy.context.selected_objects:
 		selected.select = False
+	# bpy.ops.object.select_all(action='DESELECT')
 
 def translate_coordinate_ecef_as_origin(avg_x, avg_y, avg_z, roadID):
 	"""
@@ -532,14 +536,51 @@ def translate_coordinate_ecef_as_origin(avg_x, avg_y, avg_z, roadID):
 
 	parent.location = (avg_x, avg_y, avg_z)
 
+def join_lanes_to_road(roadID):
+	road_name = 'Road_' + roadID
+	road_obj = bpy.data.objects[road_name]
+
+	deselect_all()
+	for child in road_obj.children:
+		child.select = True
+		bpy.context.scene.objects.active = child
+	bpy.ops.object.join()
+
+	for child in road_obj.children:
+		child.select = False
+
+def replace_parent_with_child(roadID):
+	#https://blender.stackexchange.com/questions/27234/python-how-to-completely-remove-an-object
+	# cost an appearant period of time
+	road_name = 'Road_' + roadID
+	road_obj = bpy.data.objects[road_name]
+
+	deselect_all()
+
+	child_obj = None # actuall only one child
+	for child in road_obj.children:
+		child.select = True
+		bpy.context.scene.objects.active = child
+		child_obj = child
+		bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
+		child.select = False
+
+	road_obj.select = True
+	bpy.ops.object.delete()
+
+	child_obj.name = road_name
+
 def export_road_gltf(roadID, export_path):
+	"""
+	Automatically batch export : https://github.com/Takanu/Capsule
+	OR move this part into a standalone add-on like Capsule
+	"""
+	# road_obj now is joined lanes mesh without hierarchy
 	deselect_all()
 	road_name = 'Road_' + roadID
 	road_obj = bpy.data.objects[road_name]
 
 	road_obj.select = True
-	for child in road_obj.children:
-		child.select = True
 
 def main():
 
