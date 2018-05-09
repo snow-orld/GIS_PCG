@@ -10,7 +10,6 @@ modified: 2018/5/7 08:37:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: leancloud
-write output file: ../server/data/ecef_roads.txt
 """
 
 import os
