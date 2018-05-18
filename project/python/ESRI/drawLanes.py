@@ -6,10 +6,12 @@ draw closed lanes with surfaces. Lanes can be in a junction.
 author: Xueman Mou
 date: 2018/3/19
 version: 1.0.4
-modified: 2018/5/4 09:05:00 GMT +0800
+modified: 2018/5/7 12:58:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: sqlite3, pyshp, pyproj, bpy, bmesh, mathutils, math
+
+write output file: ../server/data/ecef_roads.txt
 """
 
 import bpy
@@ -457,11 +459,12 @@ def calculate_all_center(dirpath):
 
 	file_path = os.path.join(dirpath, 'ecef_roads.txt')
 	with open(file_path, 'w') as f:
-		f.write('center_x, center_y, center_z, radius\n')
 		for row in c.fetchall():
 			roadID = str(row[0])
 			center, radius = calculate_road_ecef_center(roadID)
-			f.write('{},{},{},{},{}\n'.format(roadID, center[0], center[1], center[2], radius))
+			# use mm as unit
+			# f.write('{},{},{}\n'.format(center[0] * 1000, center[1] * 1000, center[2] * 1000))
+			f.write('{},{},{},{},{}\n'.format(roadID, center[0] * 1000, center[1] * 1000, center[2] * 1000, radius * 1000))
 			
 			join_lanes_to_road(roadID)
 			replace_parent_with_child(roadID)

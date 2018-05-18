@@ -20,10 +20,10 @@ def get_posionts_on_equator(segments):
 	with open('ecef_equator.txt', 'w') as f:
 		for i in range(segments):
 			delta_theta = 360 / 180 * math.pi / segments
-			f.write('{}, {}, {}\n'.format(R * math.cos(delta_theta * i), R * math.sin(delta_theta * i), 10 * random.random()))
+			f.write('{}, {}, {}\n'.format(R * math.cos(delta_theta * i) * 1000, R * math.sin(delta_theta * i) * 1000, 10 * random.random() * 1000))
 
 def main():
-	segments = int(R / 100 * 2 * math.pi)
+	segments = int(R / 10 * 2 * math.pi)
 	get_posionts_on_equator(segments)	
 
 if __name__ == '__main__':

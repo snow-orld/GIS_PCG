@@ -17,3 +17,7 @@ requirements.txt
 *.gltf
 *.bin
 *.txt
+*patent*
+*endlessway/models/track*
+*endlessway/data*
+*endlessway/track_tool.py
