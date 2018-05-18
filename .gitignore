@@ -18,6 +18,6 @@ requirements.txt
 *.bin
 *.txt
 *patent*
-*endlessway/models/track*
-*endlessway/data*
-*endlessway/track_tool.py
+project/endlessway/models/track*
+project/endlessway/data*
+project/endlessway/track_tool.py
