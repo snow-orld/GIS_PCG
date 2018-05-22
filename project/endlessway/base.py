@@ -42,8 +42,8 @@ def insertEdge(startRoadID='', endRoadID='', exitName='', enterName=''):
 
 def main():
 	init()
-	# insertVertex(3)
-	insertEdge()
+	insertVertex(1)
+	insertEdge('','','Exit','Enter')
 
 if __name__ == '__main__':
 	main()
