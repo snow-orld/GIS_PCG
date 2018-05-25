@@ -21,7 +21,7 @@ import shapefile
 from mathutils import Quaternion
 import math
 
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
 
 wgs84 = pyproj.Proj(init='epsg:4326') # longlat
 ecef = pyproj.Proj(init='epsg:4978') # geocentric
@@ -61,7 +61,7 @@ def lonlat_to_local_up(lon_lat_alt, center):
 	co = [x - x0 for x, x0 in zip(co, center)]
 	return co
 
-def getLanePoints(dirpath):
+def drawRoads(dirpath):
 
 	conn = sqlite3.connect(DB)
 	c = conn.cursor()
@@ -74,10 +74,9 @@ def getLanePoints(dirpath):
 		lat_0 = sum(sf.bbox[1::2]) * 0.5
 		center = pyproj.transform(wgs84, ecef, lon_0, lat_0, 0)
 
+	get_quaternion()
+
 	for index, sr in enumerate(sf.shapeRecords()):
-		
-		if index != 3:
-			continue
 		
 		shape = sr.shape
 		record = sr.record
@@ -90,50 +89,28 @@ def getLanePoints(dirpath):
 		first_node = (shape.points[0][0], shape.points[0][1], shape.z[0])
 		nodes.append(first_node)
 
-		# inner shape nodes, width in HLaneInfo
-		c.execute('''SELECT * FROM HRoadInfo WHERE HLaneID = ?''', (record[0],))
-		result = c.fetchall()
-		for zindex, (point, row) in enumerate(zip(shape.points[1:-1], result)):
-			node = (point[0], point[1], shape.z[zindex + 1])
-			nodes.append(node)
-		
 		# last lane node, width in HLaneNode
 		c.execute('''SELECT * FROM HRoadNode WHERE HNodeID = ?''', (record[4],))
 		result = c.fetchone()
 		last_node = (shape.points[-1][0], shape.points[-1][1], shape.z[-1])
 		nodes.append(last_node)
 
-		# get_quaternion()
-		
-		# new_nodes = []
-		# for node in nodes:
-		# 	node = lonlat_to_local_up(node, center)
-		# 	new_nodes.append(node)
+		new_nodes = []
+		for node in nodes:
+			node = lonlat_to_local_up(node, center)
+			new_nodes.append(node)
 
-		# generatePoly(new_nodes)
+		generatePoly(new_nodes, str(record[0]))
 
-	return nodes
-
-def convertCoordinate(points):
-	new_points = []
-
-	get_quaternion()
-
-	for point in points:
-		point = lonlat_to_local_up(point, center)
-		new_points.append(point)
-
-	return new_points
-
-def generatePoly(points):
+def generatePoly(points, name='Polyline'):
 	curve = bpy.data.curves.new('Poly', type='CURVE')
 	curve.dimensions = '3D'
-	obj = bpy.data.objects.new('Polyline', curve)
+	obj = bpy.data.objects.new(name, curve)
 	bpy.context.scene.objects.link(obj)
 
 	polyline = obj.data.splines.new('POLY')
 	polyline.points.add(len(points) - 1)
-	print('points {}'.format(points))
+	# print('points {}'.format(points))
 	for i in range(len(points)):
 		polyline.points[i].co = (points[i][0], points[i][1], points[i][2], 1)
 	
@@ -146,9 +123,7 @@ def generatePoly(points):
 		polyline.points[i].co[2] -= points[0][2]
 
 def main():
-	nodes = getLanePoints('/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ')
-	nodes = convertCoordinate(nodes)
-	generatePoly(nodes)
+	drawRoads('/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX')
 
 if __name__ == '__main__':
 	main()

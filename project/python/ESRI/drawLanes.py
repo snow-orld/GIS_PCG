@@ -34,7 +34,7 @@ q = None
 q_prime = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
 
 def ls(folder):
 	shapefiles = []
@@ -587,7 +587,7 @@ def export_road_gltf(roadID, export_path):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX'
 
 	shapefiles = ls(pathname)
 	
@@ -609,7 +609,7 @@ def main():
 	draw_lanes(pathname)
 
 	# calculate_road_ecef_center('5010000001')
-	calculate_all_center('/Users/mxmcecilia/Documents/GIS_PCG/project/server/data')
+	# calculate_all_center('/Users/mxmcecilia/Documents/GIS_PCG/project/server/data')
 
 if __name__ == '__main__':
 	main()
