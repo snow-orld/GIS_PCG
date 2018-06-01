@@ -2,6 +2,13 @@
 
 ## 配置Blender和Python
 
+### Install Pip without Internet
+
+Download Pip wheel, setuptools wheel and wheel wheel from Unofficial Windows Binaries for Python Extension Packages[https://www.lfd.uci.edu/~gohlke/pythonlibs/].
+```
+/dir/to/blender/python/bin/python /dir/to/get-pip.py --no-index --find-links /dir/to/pip-wheel/and/setuptools/and/wheel
+```
+
 ### 配置Blender Python
 
 Blender使用自带的python，安装第三方库需要先在blender自带的python里安装pip，参考[How to use pip with bundled python](https://blender.stackexchange.com/questions/56011/how-to-use-pip-with-blenders-bundled-python/56013#56013)。
