@@ -10,6 +10,13 @@ Blender使用自带的python，安装第三方库需要先在blender自带的pyt
 
 拷贝系统安装的python文件夹下的 Include/, DLLs/, /libs 到blender安装文件夹下的python文件夹 (比如C:\Program Files\Blender Foundation\Blender\2.78\python)。
 
+#### Install Pip without Internet
+
+Download Pip wheel, setuptools wheel and wheel wheel from [Unofficial Windows Binaries for Python Extension Packages](https://www.lfd.uci.edu/~gohlke/pythonlibs/).
+```
+/dir/to/blender/python/bin/python /dir/to/get-pip.py --no-index --find-links=/dir/to/pip-wheel/and/setuptools/and/wheel
+```
+
 #### MacOS
 
 确保操作系统中已经安装和Blender自带python同版本的python(运行~/Downloads/blender-2.xx-macOS-xx.x/blender.app/Contents/Resources/2.xx/python/bin/python3.5m 获得python版本号)。
