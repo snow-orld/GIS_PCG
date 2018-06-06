@@ -446,22 +446,61 @@ def showRFacilityL(pathname):
 		shape = sr.shape
 		record = sr.record
 
-		coordinates = []
-		widths = []
+		OType = record[3]
+		LPType = record[4]
+		height = record[5]
 
+		cos_upper = []
+		cos_lower = []
+		
 		for pindex, point in enumerate(shape.points):
-			coordinates.append((point[0], point[1], shape.z[pindex]))
-			# curbs cannot use expand here
-			widths.append(0.2)
+			plower = transform((point[0], point[1], shape.z[pindex]))
+			up = plower
+			up_norm = distance((0,0,0), up)
+			up = [x / up_norm for x in up]
 
-		coordinates_in_face = expand(coordinates, widths)
+			pupper = [x * height + x0 for x, x0 in zip(up, plower)]
+			pupper = move2Center(pupper, center)
+			plower = move2Center(plower, center)
+
+			cos_lower.append(plower)
+			cos_upper.append(pupper)
+
+		# cos_upper.reverse()
+		# coordinates_in_face = cos_upper + cos_lower
 
 		bm = bmesh.new()
-		verts_in_face = []
-		for co in coordinates_in_face:
-			vert = bm.verts.new(co)
-			verts_in_face.append(vert)
-		face = bm.faces.new(verts_in_face)
+		# verts_in_face = []
+		# for co in coordinates_in_face:
+		# 	vert = bm.verts.new(co)
+		# 	verts_in_face.append(vert)
+		# # face = bm.faces.new(verts_in_face)
+
+		# vertical curbs or walls may not perfectly sit in one plane, thus using n-polygon generation may cause unexpected shape
+		for index, (co_up, co_low) in enumerate(zip(cos_upper, cos_lower)):
+			if index == len(cos_upper) - 1:
+				break
+			verts_in_face = []
+			cos_in_face = []
+			cos_in_face.append(cos_upper[index + 1])
+			cos_in_face.append(co_up)
+			cos_in_face.append(co_low)
+			cos_in_face.append(cos_lower[index + 1])
+			for co in cos_in_face:
+				vert = bm.verts.new(co)
+				verts_in_face.append(vert)
+			face = bm.faces.new(verts_in_face)
+
+		# for index, co in enumerate(cos_lower):
+		# 	if index < len(cos_lower) - 1:
+		# 		vert1 = bm.verts.new(co)
+		# 		vert2 = bm.verts.new(cos_lower[index + 1])
+		# 		edge = bm.edges.new([vert1, vert2])
+		# for index, co in enumerate(cos_upper):
+		# 	if index < len(cos_upper) - 1:
+		# 		vert1 = bm.verts.new(co)
+		# 		vert2 = bm.verts.new(cos_upper[index + 1])
+		# 		edge = bm.edges.new([vert1, vert2])
 
 		dataname = 'LObject_' + str(record[0])
 		me = bpy.data.meshes.new(dataname)
@@ -472,11 +511,36 @@ def showRFacilityL(pathname):
 		bm.to_mesh(me)
 		bm.free()
 
+def fill_between_two_lines(lineobj1, lineobj2):
+	verts1 = []
+	verts2 = []
+
+	bm = bmesh.new()
+	bm.from_mesh(lineobj1)
+
+	for v in bm.verts:
+		verts1.append(v)
+
+	bm.free()
+	bm.from_mesh(lineobj2)
+	for v in bm.verts:
+		verts2.append(v)
+	bm.free()
+
+	bm = bmesh.new()
+	face = bm.faces.new(verts1 + verts2)
+	
+	me = bpy.data.meshes.new('surface')
+	obj= bpy.data.objects.new('surface', me)
+	bpy.context.scene.objects.link(obj)
+	bm.to_mesh(me)
+	bm.free()
+
 def main():
 	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 	# showLanes(pathname)
 	showLMarkings(pathname)
-	# showRFacilityL(pathname)
+	showRFacilityL(pathname)
 	
 
 if __name__ == '__main__':
