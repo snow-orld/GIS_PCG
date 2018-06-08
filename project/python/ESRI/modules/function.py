@@ -24,6 +24,7 @@ WGS84 = pyproj.Proj(init='epsg:4326') # longlat
 ECEF = pyproj.Proj(init='epsg:4978') # geocentric
 
 center = None
+# DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
 DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def distance(co1, co2):
@@ -157,7 +158,7 @@ def expandECEF(array_co, array_width):
 
 	for index, (co, width) in enumerate(zip(array_co, array_width)):
 		up = Vector(co)
-		up.normalize
+		up.normalize()
 		co = move2Center(co, center)
 
 		forward = None
@@ -189,6 +190,53 @@ def expandECEF(array_co, array_width):
 	cos_in_face = cos_left + cos_right
 	
 	return cos_in_face
+
+def expandDoubleECEF(array_co, array_width, in_between_width=0.15):
+	# return the border points in ccw order
+	# input array_co: array of [x, y, z] in ECEF
+	# input width: width at each centered point
+	left_part_cos_left = []
+	left_part_cos_right = []
+	right_part_cos_left = []
+	right_part_cos_right = []
+	
+	for index, (co, width) in enumerate(zip(array_co, array_width)):
+		up = Vector(co)
+		up.normalize()
+		co = move2Center(co, center)
+
+		forward = None
+		if index < len(array_co) - 1:
+			co_next = array_co[index + 1]
+			co_next = move2Center(co_next, center)
+			forward = [x - y for x, y in zip(co_next, co)]
+			forward = Vector(forward)
+			forward.normalize()
+		else:
+			co_prev = array_co[index - 1]
+			co_prev = move2Center(co_prev, center)
+			forward = [x - y for x, y in zip(co, co_prev)]
+			forward = Vector(forward)
+			forward.normalize()
+
+		left = up.cross(forward)
+		left.normalize()
+
+		co = Vector(co)
+		co_ll = co + (in_between_width / 2 + width) * left
+		co_lr = co + (in_between_width / 2) * left
+		co_rl = co + (-in_between_width / 2) * left
+		co_rr = co + (-in_between_width / 2 - width) * left
+	
+		left_part_cos_left.append(co_ll)
+		left_part_cos_right.append(co_lr)
+		right_part_cos_left.append(co_rl)
+		right_part_cos_right.append(co_rr)
+	
+	left_part_cos_left.reverse()
+	right_part_cos_left.reverse()
+
+	return left_part_cos_left + left_part_cos_right, right_part_cos_left + right_part_cos_right
 
 def showLanes(pathname):
 	sf = shapefile.Reader(os.path.join(pathname, 'HLane.shp'))
@@ -583,9 +631,10 @@ def fill_between_two_lines(lineobj1, lineobj2):
 	bm.free()
 
 def main():
+	# pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
 	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 	# showLanes(pathname)
-	showLMarkings(pathname)
+	# showLMarkings(pathname)
 	showRFacilityL(pathname)
 	
 if __name__ == '__main__':
