@@ -34,7 +34,7 @@ q = None
 q_prime = None
 
 # EMG.db
-DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_CX.db'
+DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def ls(folder):
 	shapefiles = []
@@ -419,6 +419,8 @@ def draw_single_lane(nodes, laneID, parent=None):
 	bm.to_mesh(me)
 	bm.free()
 
+	# print("Drawing single lane, %s" % str(laneID))
+
 def test_helper(dirpath):
 	# draw reference line of single lane
 	sf = shapefile.Reader(os.path.join(dirpath,'HLane.shp'))
@@ -461,10 +463,10 @@ def calculate_all_center(dirpath):
 	with open(file_path, 'w') as f:
 		for row in c.fetchall():
 			roadID = str(row[0])
-			center, radius = calculate_road_ecef_center(roadID)
+			ecefCenter, radius = calculate_road_ecef_center(roadID)
 			# use mm as unit
-			# f.write('{},{},{}\n'.format(center[0] * 1000, center[1] * 1000, center[2] * 1000))
-			f.write('{},{},{},{},{}\n'.format(roadID, center[0] * 1000, center[1] * 1000, center[2] * 1000, radius * 1000))
+			f.write('{},{},{}\n'.format((center[0] + ecefCenter[0]) * 1000, (center[1] + ecefCenter[1]) * 1000, (center[2] + ecefCenter[2]) * 1000))
+			#f.write('{},{},{},{},{}\n'.format(roadID, center[0] * 1000, center[1] * 1000, center[2] * 1000, radius * 1000))
 			
 			join_lanes_to_road(roadID)
 			replace_parent_with_child(roadID)
@@ -587,7 +589,7 @@ def export_road_gltf(roadID, export_path):
 
 def main():
 
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_CX'
+	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 
 	shapefiles = ls(pathname)
 	

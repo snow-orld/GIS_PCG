@@ -6,7 +6,7 @@ common functions used in oo drawing
 author: Xueman Mou
 date: 2018/5/28
 version: 1.0.1
-modified: 2018/6/1 08:53:00 GMT +0800
+modified: 2018/6/8 16:59:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: pyproj, mathutils.Vector, bpy
@@ -36,6 +36,24 @@ def move2Center(co, center):
 def transform(co):
 	# get ecef coordinates of wgs84 co
 	return pyproj.transform(WGS84, ECEF, co[0], co[1], co[2])
+
+def cross(co1, co2):
+	# cross product of tuple/array co1 x co2
+	return (co1[1]*co2[2] - co2[1]*co1[2],
+			co2[0]*co1[2] - co1[0]*co2[2],
+			co1[0]*co2[1] - co2[0]*co1[1])
+
+def dot(co1, co2):
+	# dot product of tuple/array co1 . co2
+	return co1[0]*co2[0] + co1[1]*co2[1] + co1[2]*co2[2]
+
+def add(co1, co2):
+	# sum tuple/array vector co1, co2
+	return (co1[0] + co2[0], co1[1] + co2[1], co1[2] + co2[2])
+
+def minus(co1, co2):
+	# co1 - co2 of tuple/array vector
+	return (co1[0] - co2[0], co1[1] - co2[1], co1[2] - co2[2])
 
 def expand(array_co, array_width):
 	# return the border points in ccw order
@@ -171,54 +189,6 @@ def expandECEF(array_co, array_width):
 	cos_in_face = cos_left + cos_right
 	
 	return cos_in_face
-
-def expandDoubleECEF(array_co, array_width):
-	# return the border points in ccw order
-	# input array_co: array of [x, y, z] in ECEF
-	# input width: width at each centered point
-	left_part_cos_left = []
-	left_part_cos_right = []
-	right_part_cos_left = []
-	right_part_cos_right = []
-
-	for index, (co, width) in enumerate(zip(array_co, array_width)):
-		up = Vector(co)
-		up.normalize
-		co = move2Center(co, center)
-
-		forward = None
-		if index < len(array_co) - 1:
-			co_next = array_co[index + 1]
-			co_next = move2Center(co_next, center)
-			forward = [x - y for x, y in zip(co_next, co)]
-			forward = Vector(forward)
-			forward.normalize()
-		else:
-			co_prev = array_co[index - 1]
-			co_prev = move2Center(co_prev, center)
-			forward = [x - y for x, y in zip(co, co_prev)]
-			forward = Vector(forward)
-			forward.normalize()
-
-		left = up.cross(forward)
-		left.normalize()
-
-		co = Vector(co)
-
-		co_ll = co + (in_between_width / 2 + width) * left
-		co_lr = co + (in_between_width / 2) * left
-		co_rl = co + (-in_between_width / 2) * left
-		co_rr = co + (-in_between_width / 2 - width) * left
-	
-		left_part_cos_left.append(co_ll)
-		left_part_cos_right.append(co_lr)
-		right_part_cos_left.append(co_rl)
-		right_part_cos_right.append(co_rr)
-	
-	left_part_cos_left.reverse()
-	right_part_cos_left.reverse()
-	
-	return left_part_cos_left + left_part_cos_right, right_part_cos_left + right_part_cos_right
 
 def showLanes(pathname):
 	sf = shapefile.Reader(os.path.join(pathname, 'HLane.shp'))
@@ -356,18 +326,20 @@ def showLMarkings(pathname):
 			# 	continue
 			isLine = True
 			length_to_go = 6
-			start_co = Vector(transform((shape.points[0][0], shape.points[0][1], shape.z[0])))
-			end_co = Vector(transform((shape.points[1][0], shape.points[1][1], shape.z[1])))
+			start_co = transform((shape.points[0][0], shape.points[0][1], shape.z[0]))
+			end_co = transform((shape.points[1][0], shape.points[1][1], shape.z[1]))
 			coordinates = [start_co]
 			widths = [record[6]]
 			pindex = 1
 			while pindex < len(shape.points):
 				if distance(start_co, end_co) > length_to_go:
-					print('Interpolated between two points isLine=%s length_to_go=%f' % (isLine, length_to_go))
+					print(start_co, end_co)
+					print('Interpolated between two points length_to_go=%f' % length_to_go)
 					# find an intermediate point to cover 'length_to_go'
-					direction_vector = end_co - start_co
-					direction_vector.normalize()
-					inter_co = direction_vector * length_to_go + start_co
+					direction_vector = minus(end_co, start_co)
+					direction_vector_norm = distance((0,0,0), direction_vector)
+					direction_vector = [x / direction_vector_norm for x in direction_vector]
+					inter_co = [x * length_to_go + x0 for x, x0 in zip(direction_vector, start_co)]
 					start_co = inter_co
 					length_to_go = 0
 					if isLine:
@@ -375,14 +347,14 @@ def showLMarkings(pathname):
 						widths.append(record[6])
 				else:
 					length_to_go -= distance(end_co, start_co)
-					print('isLine=%s length_to_go=%f' % (isLine, length_to_go))
+					print('length_to_go=%f' % length_to_go)
 					if isLine:
 						coordinates.append(end_co)
 						widths.append(record[6])
 					pindex += 1
 					if pindex < len(shape.points) - 1:
 						start_co = end_co	
-						end_co = Vector(transform((shape.points[pindex][0], shape.points[pindex][1], shape.z[pindex])))
+						end_co = transform((shape.points[pindex][0], shape.points[pindex][1], shape.z[pindex]))
 					else:
 						length_to_go = 0
 
@@ -449,9 +421,20 @@ def showRFacilityL(pathname):
 		OType = record[3]
 		LPType = record[4]
 		height = record[5]
+		roadID = record[7]
+
+		# if len(roadID.split('-')) == 1:
+		# 	continue
+		# else:
+		# 	print(roadID.split('-'))
+
+		# needs to find out which side this barrier on the road is
 
 		cos_upper = []
 		cos_lower = []
+
+		cos_lower_l = []
+		cos_upper_l = []
 		
 		for pindex, point in enumerate(shape.points):
 			plower = transform((point[0], point[1], shape.z[pindex]))
@@ -463,8 +446,31 @@ def showRFacilityL(pathname):
 			pupper = move2Center(pupper, center)
 			plower = move2Center(plower, center)
 
+			forward = None
+			if pindex == len(shape.points) - 1:
+				p_prev = transform((shape.points[pindex - 1][0], shape.points[pindex - 1][1], shape.z[pindex - 1]))
+				forward = minus(plower, p_prev)
+				pass
+			else:
+				p_next = transform((shape.points[pindex + 1][0], shape.points[pindex + 1][1], shape.z[pindex + 1]))
+				forward = minus(p_next, plower)
+				pass
+
+			forward_norm = distance((0,0,0), forward)
+			forward = [x / forward_norm for x in forward]
+
+			left = cross(up, forward)
+			left_norm = distance((0,0,0), left)
+			left = [x / left_norm for x in left]
+
+			plower_left = [x * 0.5 + x0 for x, x0 in zip(left, plower)]
+			pupper_left = [x * 0.5 + x0 for x, x0 in zip(left, pupper)]
+
 			cos_lower.append(plower)
 			cos_upper.append(pupper)
+
+			cos_lower_l.append(plower_left)
+			cos_upper_l.append(pupper_left)
 
 		# cos_upper.reverse()
 		# coordinates_in_face = cos_upper + cos_lower
@@ -488,8 +494,48 @@ def showRFacilityL(pathname):
 			cos_in_face.append(cos_lower[index + 1])
 			for co in cos_in_face:
 				vert = bm.verts.new(co)
+				if index < 2:
+					vert.select = True
 				verts_in_face.append(vert)
 			face = bm.faces.new(verts_in_face)
+
+			verts_in_face = []
+			cos_in_face = []
+			cos_in_face.append(co_up)
+			cos_in_face.append(cos_upper[index + 1])
+			cos_in_face.append(cos_upper_l[index + 1])
+			cos_in_face.append(cos_upper_l[index])
+			for co in cos_in_face:
+				vert = bm.verts.new(co)
+				if index < 2:
+					vert.select = True
+				verts_in_face.append(vert)
+			# face = bm.faces.new(verts_in_face)
+
+			verts_in_face = []
+			cos_in_face = []
+			cos_in_face.append(cos_upper_l[index])
+			cos_in_face.append(cos_upper_l[index + 1])
+			cos_in_face.append(cos_lower_l[index + 1])
+			cos_in_face.append(cos_lower_l[index])
+			for co in cos_in_face:
+				vert = bm.verts.new(co)
+				if index < 2:
+					vert.select = True
+				verts_in_face.append(vert)
+			# face = bm.faces.new(verts_in_face)
+
+		# for index, co in enumerate(cos_lower_l):
+		# 	if index < len(cos_lower_l) - 1:
+		# 		vert = bm.verts.new(co)
+		# 		vert2 = bm.verts.new(cos_lower_l[index + 1])
+		# 		bm.edges.new([vert, vert2])
+
+		# for index, co in enumerate(cos_upper_l):
+		# 	if index < len(cos_upper_l) - 1:
+		# 		vert = bm.verts.new(co)
+		# 		vert2 = bm.verts.new(cos_upper_l[index + 1])
+		# 		bm.edges.new([vert, vert2])
 
 		# for index, co in enumerate(cos_lower):
 		# 	if index < len(cos_lower) - 1:
@@ -542,6 +588,5 @@ def main():
 	showLMarkings(pathname)
 	showRFacilityL(pathname)
 	
-
 if __name__ == '__main__':
 	main()
