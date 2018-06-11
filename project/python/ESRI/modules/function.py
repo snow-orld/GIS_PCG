@@ -6,7 +6,7 @@ common functions used in oo drawing
 author: Xueman Mou
 date: 2018/5/28
 version: 1.0.1
-modified: 2018/6/8 16:59:00 GMT +0800
+modified: 2018/6/11 10:03:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: pyproj, mathutils.Vector, bpy
@@ -24,7 +24,7 @@ WGS84 = pyproj.Proj(init='epsg:4326') # longlat
 ECEF = pyproj.Proj(init='epsg:4978') # geocentric
 
 center = None
-# DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
+#DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
 DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def distance(co1, co2):
@@ -330,6 +330,9 @@ def showLMarkings(pathname):
 		shape = sr.shape
 		record = sr.record
 
+		# Related Road IDs, and Lane IDs
+		print('Road {} - Lane {}'.format(record[8], record[9]))
+
 		coordinates = []
 		widths = []
 
@@ -422,6 +425,59 @@ def showLMarkings(pathname):
 
 		elif form == 4:
 			# 双虚线
+			isLine = True
+			length_to_go = 6
+			start_co = transform((shape.points[0][0], shape.points[0][1], shape.z[0]))
+			end_co = transform((shape.points[1][0], shape.points[1][1], shape.z[1]))
+			coordinates = [start_co]
+			widths = [record[6]]
+			pindex = 1
+			while pindex < len(shape.points):
+				if distance(start_co, end_co) > length_to_go:
+					print(start_co, end_co)
+					print('Interpolated between two points length_to_go=%f' % length_to_go)
+					# find an intermediate point to cover 'length_to_go'
+					direction_vector = minus(end_co, start_co)
+					direction_vector_norm = distance((0,0,0), direction_vector)
+					direction_vector = [x / direction_vector_norm for x in direction_vector]
+					inter_co = [x * length_to_go + x0 for x, x0 in zip(direction_vector, start_co)]
+					start_co = inter_co
+					length_to_go = 0
+					if isLine:
+						coordinates.append(inter_co)
+						widths.append(record[6])
+				else:
+					length_to_go -= distance(end_co, start_co)
+					print('length_to_go=%f' % length_to_go)
+					if isLine:
+						coordinates.append(end_co)
+						widths.append(record[6])
+					pindex += 1
+					if pindex < len(shape.points) - 1:
+						start_co = end_co	
+						end_co = transform((shape.points[pindex][0], shape.points[pindex][1], shape.z[pindex]))
+					else:
+						length_to_go = 0
+
+				if math.fabs(length_to_go - 0) < 1E-05:
+					if isLine:
+						verts_in_face = []
+						cos_left, cos_right = expandDoubleECEF(coordinates, widths)
+						verts_in_face_left = []
+						verts_in_face_right = []
+						for co in cos_left:
+							vert = bm.verts.new(co)
+							verts_in_face_left.append(vert)
+						face = bm.faces.new(verts_in_face_left)
+						for co in cos_right:
+							vert = bm.verts.new(co)
+							verts_in_face_right.append(vert)
+						face = bm.faces.new(verts_in_face_right)
+
+					isLine = False if isLine is True else True
+					length_to_go = 6 if isLine is True else 9
+					coordinates = [start_co]
+					widths = [record[6]]
 			pass
 		elif form == 5:
 			# 虚实线
@@ -470,11 +526,7 @@ def showRFacilityL(pathname):
 		LPType = record[4]
 		height = record[5]
 		roadID = record[7]
-
-		# if len(roadID.split('-')) == 1:
-		# 	continue
-		# else:
-		# 	print(roadID.split('-'))
+		width = 0.5
 
 		# needs to find out which side this barrier on the road is
 
@@ -497,22 +549,22 @@ def showRFacilityL(pathname):
 			forward = None
 			if pindex == len(shape.points) - 1:
 				p_prev = transform((shape.points[pindex - 1][0], shape.points[pindex - 1][1], shape.z[pindex - 1]))
+				p_prev = move2Center(p_prev, center)
 				forward = minus(plower, p_prev)
-				pass
 			else:
 				p_next = transform((shape.points[pindex + 1][0], shape.points[pindex + 1][1], shape.z[pindex + 1]))
+				p_next = move2Center(p_next, center)
 				forward = minus(p_next, plower)
-				pass
-
+			
 			forward_norm = distance((0,0,0), forward)
 			forward = [x / forward_norm for x in forward]
 
-			left = cross(up, forward)
-			left_norm = distance((0,0,0), left)
-			left = [x / left_norm for x in left]
+			right = cross(forward, up)
+			right_norm = distance((0,0,0), right)
+			right = [x / right_norm for x in right]
 
-			plower_left = [x * 0.5 + x0 for x, x0 in zip(left, plower)]
-			pupper_left = [x * 0.5 + x0 for x, x0 in zip(left, pupper)]
+			plower_left = [x * width + x0 for x, x0 in zip(right, plower)]
+			pupper_left = [x * width + x0 for x, x0 in zip(right, pupper)]
 
 			cos_lower.append(plower)
 			cos_upper.append(pupper)
@@ -522,7 +574,6 @@ def showRFacilityL(pathname):
 
 		# cos_upper.reverse()
 		# coordinates_in_face = cos_upper + cos_lower
-
 		bm = bmesh.new()
 		# verts_in_face = []
 		# for co in coordinates_in_face:
@@ -573,29 +624,6 @@ def showRFacilityL(pathname):
 				verts_in_face.append(vert)
 			# face = bm.faces.new(verts_in_face)
 
-		# for index, co in enumerate(cos_lower_l):
-		# 	if index < len(cos_lower_l) - 1:
-		# 		vert = bm.verts.new(co)
-		# 		vert2 = bm.verts.new(cos_lower_l[index + 1])
-		# 		bm.edges.new([vert, vert2])
-
-		# for index, co in enumerate(cos_upper_l):
-		# 	if index < len(cos_upper_l) - 1:
-		# 		vert = bm.verts.new(co)
-		# 		vert2 = bm.verts.new(cos_upper_l[index + 1])
-		# 		bm.edges.new([vert, vert2])
-
-		# for index, co in enumerate(cos_lower):
-		# 	if index < len(cos_lower) - 1:
-		# 		vert1 = bm.verts.new(co)
-		# 		vert2 = bm.verts.new(cos_lower[index + 1])
-		# 		edge = bm.edges.new([vert1, vert2])
-		# for index, co in enumerate(cos_upper):
-		# 	if index < len(cos_upper) - 1:
-		# 		vert1 = bm.verts.new(co)
-		# 		vert2 = bm.verts.new(cos_upper[index + 1])
-		# 		edge = bm.edges.new([vert1, vert2])
-
 		dataname = 'LObject_' + str(record[0])
 		me = bpy.data.meshes.new(dataname)
 		file_obj = bpy.data.objects.new(dataname, me)
@@ -604,6 +632,16 @@ def showRFacilityL(pathname):
 
 		bm.to_mesh(me)
 		bm.free()
+
+		# delete double vertices
+		# bpy.context.scene.objects.active = None
+		# bpy.context.scene.objects.active = file_obj
+		# bpy.ops.object.mode_set(mode='EDIT')
+		# bpy.ops.mesh.select_all(action='SELECT')
+		# bpy.ops.mesh.remove_doubles()
+		# bpy.ops.mesh.select_all(action='DESELECT')
+		# bpy.ops.object.mode_set(mode='OBJECT')
+		# bpy.context.scene.objects.active = None
 
 def fill_between_two_lines(lineobj1, lineobj2):
 	verts1 = []
@@ -631,10 +669,11 @@ def fill_between_two_lines(lineobj1, lineobj2):
 	bm.free()
 
 def main():
-	# pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
+	#pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
 	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
+	
 	# showLanes(pathname)
-	# showLMarkings(pathname)
+	showLMarkings(pathname)
 	showRFacilityL(pathname)
 	
 if __name__ == '__main__':
