@@ -24,7 +24,7 @@ WGS84 = pyproj.Proj(init='epsg:4326') # longlat
 ECEF = pyproj.Proj(init='epsg:4978') # geocentric
 
 center = None
-#DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
+# DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
 DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
 
 def distance(co1, co2):
@@ -339,7 +339,7 @@ def showLMarkings(pathname):
 		# see what type of lane form the L Marking is
 		bm = bmesh.new()
 		form = record[5]
-		if form == 1 or form == 3:
+		if form == 1:# or form == 3:
 			# 单实线
 			coordinates = []
 			widths = []
@@ -382,10 +382,10 @@ def showLMarkings(pathname):
 			coordinates = [start_co]
 			widths = [record[6]]
 			pindex = 1
-			while pindex < len(shape.points):
+			while pindex < len(shape.points) - 1:
 				if distance(start_co, end_co) > length_to_go:
-					print(start_co, end_co)
-					print('Interpolated between two points length_to_go=%f' % length_to_go)
+					print(distance(start_co, end_co))
+					print('Interpolated between two points length_to_go=%f isLine=%s' % (length_to_go, isLine))
 					# find an intermediate point to cover 'length_to_go'
 					direction_vector = minus(end_co, start_co)
 					direction_vector_norm = distance((0,0,0), direction_vector)
@@ -398,12 +398,13 @@ def showLMarkings(pathname):
 						widths.append(record[6])
 				else:
 					length_to_go -= distance(end_co, start_co)
-					print('length_to_go=%f' % length_to_go)
+					print(distance(end_co, start_co))
+					print('whole seg is used, length_to_go=%f, isLine=%s' % (length_to_go, isLine))
 					if isLine:
 						coordinates.append(end_co)
 						widths.append(record[6])
 					pindex += 1
-					if pindex < len(shape.points) - 1:
+					if pindex <= len(shape.points) - 1:
 						start_co = end_co	
 						end_co = transform((shape.points[pindex][0], shape.points[pindex][1], shape.z[pindex]))
 					else:
@@ -432,10 +433,10 @@ def showLMarkings(pathname):
 			coordinates = [start_co]
 			widths = [record[6]]
 			pindex = 1
-			while pindex < len(shape.points):
+			while pindex < len(shape.points) - 1:
 				if distance(start_co, end_co) > length_to_go:
 					print(start_co, end_co)
-					print('Interpolated between two points length_to_go=%f' % length_to_go)
+					print('Interpolated between two points length_to_go=%f isLine=%s' % (length_to_go, isLine))
 					# find an intermediate point to cover 'length_to_go'
 					direction_vector = minus(end_co, start_co)
 					direction_vector_norm = distance((0,0,0), direction_vector)
@@ -453,7 +454,7 @@ def showLMarkings(pathname):
 						coordinates.append(end_co)
 						widths.append(record[6])
 					pindex += 1
-					if pindex < len(shape.points) - 1:
+					if pindex <= len(shape.points) - 1:
 						start_co = end_co	
 						end_co = transform((shape.points[pindex][0], shape.points[pindex][1], shape.z[pindex]))
 					else:
@@ -669,9 +670,8 @@ def fill_between_two_lines(lineobj1, lineobj2):
 	bm.free()
 
 def main():
-	#pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
+	# pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
 	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
-	
 	# showLanes(pathname)
 	showLMarkings(pathname)
 	showRFacilityL(pathname)
