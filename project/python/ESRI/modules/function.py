@@ -6,7 +6,7 @@ common functions used in oo drawing
 author: Xueman Mou
 date: 2018/5/28
 version: 1.0.1
-modified: 2018/6/11 10:03:00 GMT +0800
+modified: 2018/6/13 13:40:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: pyproj, mathutils.Vector, bpy
@@ -331,7 +331,7 @@ def showLMarkings(pathname):
 		record = sr.record
 
 		# Related Road IDs, and Lane IDs
-		print('Road {} - Lane {}'.format(record[8], record[9]))
+		# print('Road {} - Lane {}'.format(record[8], record[9]))
 
 		coordinates = []
 		widths = []
@@ -339,7 +339,7 @@ def showLMarkings(pathname):
 		# see what type of lane form the L Marking is
 		bm = bmesh.new()
 		form = record[5]
-		if form == 1:# or form == 3:
+		if form == 1 or form == 3:
 			# 单实线
 			coordinates = []
 			widths = []
@@ -526,16 +526,52 @@ def showRFacilityL(pathname):
 		OType = record[3]
 		LPType = record[4]
 		height = record[5]
-		roadID = record[7]
+		roadIDs = record[7].split('-')
 		width = 0.5
 
-		# needs to find out which side this barrier on the road is
-
+		# needs to find out which side this barrier on the FacilityL of the road is
+		sf2 = shapefile.Reader(os.path.join(pathname, 'HLane.shp'))
+		related_lane_index = []
+		for lindex, sr in enumerate(sf2.shapeRecords()):
+			lrecord = sr.record
+			for roadID in roadIDs:
+				if roadID in lrecord[7].split('-'):
+					# print(roadID, roadIDs)
+					related_lane_index.append(lindex)
+		# print(related_lane_index)
+		# pick the first 2 as sample - what if the road is bidirectional, all related lanes contain at least two directoins - find a closes lane
+		co1 = transform((shape.points[0][0],shape.points[0][1],shape.z[0]))
+		co2 = transform((shape.points[1][0],shape.points[1][1],shape.z[1]))
+		forward = minus(co2, co1)
+		up = co1
+		min_related_lane_index = 0
+		min_lane_point_index = 0
+		min_distance = 1E9
+		for lindex in related_lane_index:
+			related_lane_shape = sf2.shapeRecords()[lindex].shape
+			for pindex, point in enumerate(related_lane_shape.points):
+				# print('Comparing to get closest points to RFacilityL...')
+				new_distance = distance(transform((point[0], point[1], related_lane_shape.z[pindex])), co1)
+				if min_distance > new_distance:
+					min_distance = new_distance
+					min_lane_point_index = pindex
+					min_related_lane_index = lindex
+		related_lane_shape = sf2.shapeRecords()[min_related_lane_index].shape
+		lane_co1 = transform((related_lane_shape.points[min_lane_point_index][0], related_lane_shape.points[min_lane_point_index][1], related_lane_shape.z[min_lane_point_index]))
+		vec = minus(lane_co1, co1)
+		# assume vec is left relative to forward
+		lane_up = cross(forward, vec)
+		if dot(lane_up, up) > 0:
+			out_is_right = True
+		else:
+			out_is_right = False
+		# end of finding which side this barrier on the FacilityL of the road is
+		
 		cos_upper = []
 		cos_lower = []
 
-		cos_lower_l = []
-		cos_upper_l = []
+		cos_lower_o = []
+		cos_upper_o = []
 		
 		for pindex, point in enumerate(shape.points):
 			plower = transform((point[0], point[1], shape.z[pindex]))
@@ -560,18 +596,22 @@ def showRFacilityL(pathname):
 			forward_norm = distance((0,0,0), forward)
 			forward = [x / forward_norm for x in forward]
 
-			right = cross(forward, up)
-			right_norm = distance((0,0,0), right)
-			right = [x / right_norm for x in right]
-
-			plower_left = [x * width + x0 for x, x0 in zip(right, plower)]
-			pupper_left = [x * width + x0 for x, x0 in zip(right, pupper)]
+			if out_is_right:
+				out = cross(forward, up)		
+			else:
+				out = cross(up, forward)
+		
+			out_norm = distance((0,0,0), out)
+			out = [x / out_norm for x in out]
+		
+			plower_out = [x * width + x0 for x, x0 in zip(out, plower)]
+			pupper_out = [x * width + x0 for x, x0 in zip(out, pupper)]
 
 			cos_lower.append(plower)
 			cos_upper.append(pupper)
 
-			cos_lower_l.append(plower_left)
-			cos_upper_l.append(pupper_left)
+			cos_lower_o.append(plower_out)
+			cos_upper_o.append(pupper_out)
 
 		# cos_upper.reverse()
 		# coordinates_in_face = cos_upper + cos_lower
@@ -584,14 +624,22 @@ def showRFacilityL(pathname):
 
 		# vertical curbs or walls may not perfectly sit in one plane, thus using n-polygon generation may cause unexpected shape
 		for index, (co_up, co_low) in enumerate(zip(cos_upper, cos_lower)):
+
 			if index == len(cos_upper) - 1:
 				break
+			# inner face
 			verts_in_face = []
 			cos_in_face = []
-			cos_in_face.append(cos_upper[index + 1])
-			cos_in_face.append(co_up)
-			cos_in_face.append(co_low)
-			cos_in_face.append(cos_lower[index + 1])
+			if out_is_right:
+				cos_in_face.append(cos_upper[index + 1])
+				cos_in_face.append(cos_lower[index + 1])
+				cos_in_face.append(co_low)
+				cos_in_face.append(co_up)
+			else:
+				cos_in_face.append(cos_upper[index + 1])
+				cos_in_face.append(co_up)
+				cos_in_face.append(co_low)
+				cos_in_face.append(cos_lower[index + 1])
 			for co in cos_in_face:
 				vert = bm.verts.new(co)
 				if index < 2:
@@ -599,31 +647,85 @@ def showRFacilityL(pathname):
 				verts_in_face.append(vert)
 			face = bm.faces.new(verts_in_face)
 
+			# top face
 			verts_in_face = []
 			cos_in_face = []
-			cos_in_face.append(co_up)
-			cos_in_face.append(cos_upper[index + 1])
-			cos_in_face.append(cos_upper_l[index + 1])
-			cos_in_face.append(cos_upper_l[index])
+			if out_is_right:
+				cos_in_face.append(co_up)
+				cos_in_face.append(cos_upper_o[index])
+				cos_in_face.append(cos_upper_o[index + 1])
+				cos_in_face.append(cos_upper[index + 1])
+			else:
+				cos_in_face.append(co_up)
+				cos_in_face.append(cos_upper[index + 1])
+				cos_in_face.append(cos_upper_o[index + 1])
+				cos_in_face.append(cos_upper_o[index])
 			for co in cos_in_face:
 				vert = bm.verts.new(co)
 				if index < 2:
 					vert.select = True
 				verts_in_face.append(vert)
-			# face = bm.faces.new(verts_in_face)
+			face = bm.faces.new(verts_in_face)
 
+			# outer face
 			verts_in_face = []
 			cos_in_face = []
-			cos_in_face.append(cos_upper_l[index])
-			cos_in_face.append(cos_upper_l[index + 1])
-			cos_in_face.append(cos_lower_l[index + 1])
-			cos_in_face.append(cos_lower_l[index])
+			if out_is_right:
+				cos_in_face.append(cos_upper_o[index])
+				cos_in_face.append(cos_lower_o[index])
+				cos_in_face.append(cos_lower_o[index + 1])
+				cos_in_face.append(cos_upper_o[index + 1])
+			else:
+				cos_in_face.append(cos_upper_o[index])
+				cos_in_face.append(cos_upper_o[index + 1])
+				cos_in_face.append(cos_lower_o[index + 1])
+				cos_in_face.append(cos_lower_o[index])
 			for co in cos_in_face:
 				vert = bm.verts.new(co)
 				if index < 2:
 					vert.select = True
 				verts_in_face.append(vert)
-			# face = bm.faces.new(verts_in_face)
+			face = bm.faces.new(verts_in_face)
+
+			# front face
+			verts_in_face = []
+			cos_in_face = []
+			if out_is_right:
+				cos_in_face.append(cos_lower[index + 1])
+				cos_in_face.append(cos_upper[index + 1])
+				cos_in_face.append(cos_upper_o[index + 1])
+				cos_in_face.append(cos_lower_o[index + 1])
+			else:
+				cos_in_face.append(cos_lower[index + 1])
+				cos_in_face.append(cos_lower_o[index + 1])
+				cos_in_face.append(cos_upper_o[index + 1])
+				cos_in_face.append(cos_upper[index + 1])
+			for co in cos_in_face:
+				vert = bm.verts.new(co)
+				if index < 2:
+					vert.select = True
+				verts_in_face.append(vert)
+			face = bm.faces.new(verts_in_face)
+
+			# back face
+			verts_in_face = []
+			cos_in_face = []
+			if out_is_right:
+				cos_in_face.append(co_low)
+				cos_in_face.append(cos_lower_o[index])
+				cos_in_face.append(cos_upper_o[index])
+				cos_in_face.append(co_up)
+			else:
+				cos_in_face.append(co_low)
+				cos_in_face.append(co_up)
+				cos_in_face.append(cos_upper_o[index])
+				cos_in_face.append(cos_lower_o[index])
+			for co in cos_in_face:
+				vert = bm.verts.new(co)
+				if index < 2:
+					vert.select = True
+				verts_in_face.append(vert)
+			face = bm.faces.new(verts_in_face)
 
 		dataname = 'LObject_' + str(record[0])
 		me = bpy.data.meshes.new(dataname)
@@ -635,14 +737,13 @@ def showRFacilityL(pathname):
 		bm.free()
 
 		# delete double vertices
-		# bpy.context.scene.objects.active = None
-		# bpy.context.scene.objects.active = file_obj
-		# bpy.ops.object.mode_set(mode='EDIT')
-		# bpy.ops.mesh.select_all(action='SELECT')
-		# bpy.ops.mesh.remove_doubles()
-		# bpy.ops.mesh.select_all(action='DESELECT')
-		# bpy.ops.object.mode_set(mode='OBJECT')
-		# bpy.context.scene.objects.active = None
+		bpy.context.scene.objects.active = file_obj
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.mesh.select_all(action='SELECT')
+		bpy.ops.mesh.remove_doubles()
+		bpy.ops.mesh.select_all(action='DESELECT')
+		bpy.ops.object.mode_set(mode='OBJECT')
+		bpy.context.scene.objects.active = None
 
 def fill_between_two_lines(lineobj1, lineobj2):
 	verts1 = []
