@@ -6,7 +6,7 @@ common functions used in oo drawing
 author: Xueman Mou
 date: 2018/5/28
 version: 1.0.1
-modified: 2018/6/13 13:40:00 GMT +0800
+modified: 2018/6/14 18:30:00 GMT +0800
 
 developing env: python 3.5.2
 dependencies: pyproj, mathutils.Vector, bpy
@@ -19,13 +19,17 @@ import pyproj, shapefile
 import os, sqlite3, math
 import bpy, bmesh
 
+from bpy.types import Operator, Panel
+
 # proj parameters
 WGS84 = pyproj.Proj(init='epsg:4326') # longlat
 ECEF = pyproj.Proj(init='epsg:4978') # geocentric
 
 center = None
 # DB = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ.db'
+# pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
 DB = '/Users/mxmcecilia/Documents/GIS_PCG/project/python/ESRI/EMG_GZ.db'
+pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 
 def distance(co1, co2):
 	return math.sqrt(math.pow(co2[0] - co1[0], 2) + math.pow(co2[1] - co1[1], 2) + math.pow(co2[2] - co1[2], 2))
@@ -745,6 +749,96 @@ def showRFacilityL(pathname):
 		bpy.ops.object.mode_set(mode='OBJECT')
 		bpy.context.scene.objects.active = None
 
+def showAMarkings(pathname):
+	sf = shapefile.Reader(os.path.join(pathname, 'AMarking.shp'))
+
+	# recenter bbox 
+	global center
+	if center == None:
+		lon_0 = sum(sf.bbox[0::2]) * 0.5
+		lat_0 = sum(sf.bbox[1::2]) * 0.5
+		center = transform((lon_0, lat_0) + (0,))
+
+	AMarking_obj_name = 'AMarking'
+	AMarking_obj = None
+	if bpy.data.objects.find(AMarking_obj_name) == -1:
+		AMarking_obj = bpy.data.objects.new(AMarking_obj_name, None)
+		bpy.context.scene.objects.link(AMarking_obj)
+	else:
+		AMarking_obj = bpy.data.objects[AMarking_obj_name]
+
+	for index, sr in enumerate(sf.shapeRecords()):
+		shape = sr.shape
+		record = sr.record
+
+		bm = bmesh.new()
+		verts_in_face = []
+
+		for pindex, point in enumerate(shape.points):
+			co = transform((point[0], point[1], shape.z[pindex]))
+			co = move2Center(co, center)
+			vert = bm.verts.new(co)
+			verts_in_face.append(vert)
+
+		verts_in_face.reverse()
+		face = bm.faces.new(verts_in_face)
+
+		dataname = "AMID_" + str(record[0])
+		me = bpy.data.meshes.new(dataname)
+		file_obj = bpy.data.objects.new(dataname, me)
+		bpy.context.scene.objects.link(file_obj)
+		file_obj.parent = AMarking_obj
+
+		bm.to_mesh(me)
+		bm.free()
+
+def showRFacilityA(pathname):
+	"""
+	Problem: Default winding sequence is opposite to the previous UP direction.
+	Solution: Use RFacilityL's up, also only in RFacility's Up the right-handed driving rule stands	
+	"""
+	sf = shapefile.Reader(os.path.join(pathname, 'RFacilityA.shp'))
+
+	# recenter bbox 
+	global center
+	if center == None:
+		lon_0 = sum(sf.bbox[0::2]) * 0.5
+		lat_0 = sum(sf.bbox[1::2]) * 0.5
+		center = transform((lon_0, lat_0) + (0,))
+
+	RFacilityA_obj_name = 'RFacilityA'
+	RFacilityA_obj = None
+	if bpy.data.objects.find(RFacilityA_obj_name) == -1:
+		RFacilityA_obj = bpy.data.objects.new(RFacilityA_obj_name, None)
+		bpy.context.scene.objects.link(RFacilityA_obj)
+	else:
+		RFacilityA_obj = bpy.data.objects[RFacilityA_obj_name]
+
+	for index, sr in enumerate(sf.shapeRecords()):
+		shape = sr.shape
+		record = sr.record
+
+		bm = bmesh.new()
+		verts_in_face = []
+		
+		for pindex, point in enumerate(shape.points):
+			co = transform((point[0], point[1], shape.z[pindex]))
+			co = move2Center(co, center)
+			vert = bm.verts.new(co)
+			verts_in_face.append(vert)
+
+		verts_in_face.reverse()
+		face = bm.faces.new(verts_in_face)
+
+		dataname = "AObject_" + str(record[0])
+		me = bpy.data.meshes.new(dataname)
+		file_obj = bpy.data.objects.new(dataname, me)
+		bpy.context.scene.objects.link(file_obj)
+		file_obj.parent = RFacilityA_obj
+
+		bm.to_mesh(me)
+		bm.free()
+
 def fill_between_two_lines(lineobj1, lineobj2):
 	verts1 = []
 	verts2 = []
@@ -770,12 +864,158 @@ def fill_between_two_lines(lineobj1, lineobj2):
 	bm.to_mesh(me)
 	bm.free()
 
+def buildLaneStructure(pathname):
+
+	# group lanes by related roads
+	sf_road = shapefile.Reader(os.path.join(pathname, 'HRoad.shp'))
+	sf_lane = shapefile.Reader(os.path.join(pathname, 'HLane.shp'))
+	sf_LMarking = shapefile.Reader(os.path.join(pathname, 'LMarking.shp'))
+
+	lanes_by_road = {}
+	
+	for index, sr in enumerate(sf_lane.shapeRecords()):
+		record = sr.record
+		laneID = record[0]
+		roadIDs = record[7].split('-')
+
+		for roadID in roadIDs:
+			if roadID not in lanes_by_road:
+				lanes_by_road[roadID] = [laneID]
+			else:
+				lanes_by_road[roadID].append(laneID)
+	
+	seen_lanes = {}
+	duplicates = []
+	for roadID in lanes_by_road:
+		for laneID in lanes_by_road[roadID]:
+			if laneID not in seen_lanes:
+				seen_lanes[laneID] = True
+			else:
+				duplicates.append(laneID)
+	print(duplicates)
+
+	for index, sr in enumerate(sf_LMarking.shapeRecords()):
+		shape = sr.shape
+		record = sr.record
+
+		LMID = record[0]
+		LHRoadIDs = record[8].split('-')
+		LHLaneIDs = record[9].split('-')
+
+		if len(LHRoadIDs) > 1:
+			print('')
+			print(LHRoadIDs)
+			print(LHLaneIDs)
+			obj = bpy.data.objects['LMID_' + str(LMID)]
+			obj.select = True
+
 def main():
-	# pathname = 'C:\\Users\\xueman.mou\\Downloads\\4Windows\\data\\EMG_GZ'
-	pathname = '/Users/mxmcecilia/Documents/GIS_PCG/data/EMG_sample_data/EMG_GZ'
 	# showLanes(pathname)
 	showLMarkings(pathname)
-	showRFacilityL(pathname)
-	
+	showAMarkings(pathname)
+	#showRFacilityL(pathname)
+	#showRFacilityA(pathname)
+	buildLaneStructure(pathname)
+
+################################################
+#	Operator
+################################################
+class esri_show_LMarkings(Operator):
+	bl_idname = "esri.line_marking"
+	bl_label = "Show Line Markings"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		showLMarkings(pathname)
+		return {"FINISHED"}
+
+class esri_show_AMarkings(Operator):
+	bl_idname = "esri.area_marking"
+	bl_label = "Show Area Markings"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		showAMarkings(pathname)
+		return {"FINISHED"}
+
+class esri_show_RFacilityL(Operator):
+	bl_idname = "esri.line_facility"
+	bl_label = "Show RFacilityL"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		showRFacilityL(pathname)
+		return {"FINISHED"}
+
+class esri_show_RFacilityA(Operator):
+	bl_idname = "esri.area_facility"
+	bl_label = "Show RFacilityA"
+	bl_options = {"REGISTER", "UNDO"}
+
+	def execute(self, context):
+		showRFacilityA(pathname)
+		return {"FINISHED"}
+
+################################################
+#	Panel
+################################################
+
+class ESRI_Panel(Panel):
+	"""Creates the main panel in the scene context of the properties editor"""
+	bl_space_type = "VIEW_3D"
+	bl_region_type = "TOOLS"
+	bl_category = "ESRI"
+
+class ESRI_Panel_Marking(ESRI_Panel, Panel):
+	bl_label = "Marking"
+
+	def draw(self, context):
+		layout = self.layout
+
+		row = layout.row()
+		col = row.column(align=True)
+		col.operator("esri.line_marking", text="Line Marking")
+
+		row = layout.row()
+		col = row.column(align=True)
+		col.operator("esri.area_marking", text="Area Marking")
+
+class ESRI_Panel_Facility(ESRI_Panel, Panel):
+	bl_label = "Facility"
+
+	def draw(self, context):
+		layout = self.layout
+
+		# row = layout.row()
+		# col = row.column(align=True)
+		# col.operator("esri.point_facility", text="Point Facility")
+
+		row = layout.row()
+		col = row.column(align=True)
+		col.operator("esri.line_facility", text="Line Facility")
+
+		row = layout.row()
+		col = row.column(align=True)
+		col.operator("esri.area_facility", text="Area Facility")
+
+
+def register():
+	bpy.utils.register_class(esri_show_LMarkings)
+	bpy.utils.register_class(esri_show_AMarkings)
+	bpy.utils.register_class(esri_show_RFacilityL)
+	bpy.utils.register_class(esri_show_RFacilityA)
+
+	bpy.utils.register_class(ESRI_Panel_Marking)
+	bpy.utils.register_class(ESRI_Panel_Facility)
+
+def unregister():
+	bpy.utils.unregister_class(esri_show_LMarkings)
+	bpy.utils.unregister_class(esri_show_AMarkings)
+	bpy.utils.unregister_class(esri_show_RFacilityL)
+	bpy.utils.unregister_class(esri_show_RFacilityA)
+
+	bpy.utils.unregister_class(ESRI_Panel_Marking)
+	bpy.utils.unregister_class(ESRI_Panel_Facility)
+
 if __name__ == '__main__':
 	main()
